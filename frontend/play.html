@@ -6,6 +6,20 @@
     <link href="https://unpkg.com/nes.css/css/nes.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="src/conway.css" />
     <title>Jeu à deux</title>
+    <style>
+      .remaining-blocks {
+        margin: 10px 0;
+        font-size: 1.1em;
+        display: flex;
+        justify-content: space-around;
+      }
+
+      .remaining-blocks div {
+        padding: 5px 10px;
+        border-radius: 5px;
+        background-color: #f0f0f0;
+      }
+    </style>
   </head>
   <body>
     <main class="nes-container is-rounded">
@@ -16,6 +30,14 @@
           <div class="game-header">
             <h1>Conway's Game of Life - Multiplayer</h1>
             <div id="player-turn">Player 1's Turn</div>
+            <div class="remaining-blocks">
+              <div>
+                Joueur 1: <span id="player1-blocks">10</span> pions restants
+              </div>
+              <div>
+                Joueur 2: <span id="player2-blocks">10</span> pions restants
+              </div>
+            </div>
           </div>
 
           <div id="grid-container"></div>
@@ -56,6 +78,7 @@
 
       ws.onmessage = function (event) {
         const data = JSON.parse(event.data);
+        console.log("Message reçu:", data);
 
         switch (data.type) {
           case "game_start":
@@ -66,6 +89,7 @@
             break;
 
           case "game_update":
+            console.log("Mise à jour du jeu:", data.game_data);
             game.jsonGame = data.game_data;
             game.currentPlayer = data.current_player;
             game.syncGridWithJSON();
@@ -93,18 +117,16 @@
       class Conway {
         constructor(gridSize = 20) {
           this.gridSize = gridSize;
-
-          // JSON pour suivre les positions des cellules
           this.jsonGame = {
             player1: [],
             player2: [],
           };
-
           this.currentPlayer = 1;
           this.playerBlocks = { 1: 0, 2: 0 };
           this.generation = 0;
           this.initializeGrid();
-          this.syncGridWithJSON(); // Initialise la grille selon le JSON
+          this.syncGridWithJSON();
+          this.updateBlocksDisplay();
         }
 
         initializeGrid() {
@@ -134,11 +156,22 @@
 
           if (!cell.classList.contains("alive")) {
             cell.classList.add("alive", `player${this.currentPlayer}`);
-            this.jsonGame[`player${this.currentPlayer}`].push([row, col]);
-            this.playerBlocks[this.currentPlayer]++;
 
-            // Envoyer la mise à jour au serveur
-            ws.send(JSON.stringify(this.jsonGame));
+            // Mise à jour du JSON
+            const position = [row, col];
+            const playerKey = `player${this.currentPlayer}`;
+
+            // Vérifier si la position n'existe pas déjà
+            if (
+              !this.jsonGame[playerKey].some(([r, c]) => r === row && c === col)
+            ) {
+              this.jsonGame[playerKey].push(position);
+              this.playerBlocks[this.currentPlayer]++;
+              this.updateBlocksDisplay();
+
+              console.log("JSON après placement:", this.jsonGame);
+              ws.send(JSON.stringify(this.jsonGame));
+            }
           }
         }
 
@@ -152,7 +185,11 @@
         }
 
         syncGridWithJSON() {
-          // console.log(this.jsonGame);
+          console.log("Synchronisation avec JSON:", this.jsonGame);
+
+          // Réinitialise les compteurs de blocs
+          this.playerBlocks = { 1: 0, 2: 0 };
+
           // Réinitialise toutes les cellules
           document.querySelectorAll(".cell").forEach((cell) => {
             cell.classList.remove("alive", "player1", "player2");
@@ -160,7 +197,11 @@
 
           // Parcours du JSON pour activer les cellules
           for (const [player, positions] of Object.entries(this.jsonGame)) {
-            const playerClass = player === "player1" ? "player1" : "player2";
+            const playerNumber = player === "player1" ? 1 : 2;
+            const playerClass = `player${playerNumber}`;
+
+            // Met à jour le compteur de blocs pour ce joueur
+            this.playerBlocks[playerNumber] = positions.length;
 
             positions.forEach(([row, col]) => {
               const cell = document.querySelector(
@@ -171,117 +212,185 @@
               }
             });
           }
+
+          this.updateBlocksDisplay();
+          console.log("Blocs après sync:", this.playerBlocks);
         }
 
         resetGame() {
-          this.jsonGame = { player1: [], player2: [] }; // Réinitialise le JSON
+          if (
+            this.jsonGame.player1.length > 0 ||
+            this.jsonGame.player2.length > 0
+          ) {
+            return;
+          }
+
+          this.jsonGame = { player1: [], player2: [] };
           this.currentPlayer = 1;
           this.playerBlocks = { 1: 0, 2: 0 };
 
-          this.syncGridWithJSON(); // Réinitialise la grille visuelle
+          this.syncGridWithJSON();
           document.getElementById("game-result").classList.add("hidden");
           this.updateTurnDisplay();
+          this.updateBlocksDisplay();
+
+          ws.send(JSON.stringify(this.jsonGame));
         }
 
         runGenerations(generations) {
-          for (let gen = 0; gen < generations; gen++) {
-            setTimeout(() => this.calculateNextGeneration(), gen * 500);
+          // Récupérer l'état actuel depuis la grille
+          const currentState = {
+            player1: [],
+            player2: [],
+          };
+
+          // Parcourir toutes les cellules pour reconstruire l'état
+          document.querySelectorAll(".cell").forEach((cell) => {
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+
+            if (cell.classList.contains("player1")) {
+              currentState.player1.push([row, col]);
+            } else if (cell.classList.contains("player2")) {
+              currentState.player2.push([row, col]);
+            }
+          });
+
+          // Mettre à jour this.jsonGame avec l'état actuel
+          this.jsonGame = currentState;
+
+          console.log("Début des générations avec état:", this.jsonGame);
+
+          // Vérifier s'il y a des cellules vivantes
+          if (
+            this.jsonGame.player1.length === 0 &&
+            this.jsonGame.player2.length === 0
+          ) {
+            console.log(
+              "Pas de cellules vivantes pour commencer les générations"
+            );
+            return;
           }
 
-          setTimeout(() => this.endGame(), generations * 500);
+          let currentGen = 0;
+          const generationInterval = setInterval(() => {
+            if (currentGen >= generations) {
+              clearInterval(generationInterval);
+              this.endGame();
+              return;
+            }
+
+            console.log(`Génération ${currentGen + 1}`);
+            this.calculateNextGeneration();
+            currentGen++;
+          }, 1000);
         }
 
         calculateNextGeneration() {
-          // Génère un nouveau JSON temporaire
-          const newJSONGame = { player1: [], player2: [] };
+          console.log("Début calculateNextGeneration");
+          console.log("État initial:", JSON.stringify(this.jsonGame));
 
-          for (let i = 0; i < this.gridSize; i++) {
-            for (let j = 0; j < this.gridSize; j++) {
-              const currentPlayer = this.getPlayerFromJSON(i, j);
-              const liveNeighbors = this.countLiveNeighbors(i, j);
+          const newState = { player1: [], player2: [] };
+          const gridState = Array(this.gridSize)
+            .fill()
+            .map(() => Array(this.gridSize).fill(0));
+
+          // Marquer les cellules existantes dans la grille
+          ["player1", "player2"].forEach((player, index) => {
+            this.jsonGame[player].forEach(([row, col]) => {
+              if (
+                row >= 0 &&
+                row < this.gridSize &&
+                col >= 0 &&
+                col < this.gridSize
+              ) {
+                gridState[row][col] = index + 1;
+              }
+            });
+          });
+
+          // Calculer la prochaine génération
+          for (let row = 0; row < this.gridSize; row++) {
+            for (let col = 0; col < this.gridSize; col++) {
+              const currentPlayer = gridState[row][col];
+              const neighbors = this.countLiveNeighborsFromGrid(
+                gridState,
+                row,
+                col
+              );
 
               if (currentPlayer !== 0) {
-                // Cellule vivante
-                if (liveNeighbors >= 2 && liveNeighbors <= 3) {
-                  newJSONGame[`player${currentPlayer}`].push([i, j]);
+                // Règle de survie
+                if (neighbors === 2 || neighbors === 3) {
+                  newState[`player${currentPlayer}`].push([row, col]);
                 }
-              } else {
-                // Cellule morte
-                if (liveNeighbors === 3) {
-                  const dominantPlayer = this.determineDominantPlayer(i, j);
-                  newJSONGame[`player${dominantPlayer}`].push([i, j]);
+              } else if (neighbors === 3) {
+                // Règle de naissance
+                const dominantPlayer = this.getDominantPlayerFromGrid(
+                  gridState,
+                  row,
+                  col
+                );
+                newState[`player${dominantPlayer}`].push([row, col]);
+              }
+            }
+          }
+
+          console.log("Nouvel état calculé:", newState);
+          this.jsonGame = newState;
+          this.syncGridWithJSON();
+          ws.send(JSON.stringify(this.jsonGame));
+        }
+
+        countLiveNeighborsFromGrid(grid, row, col) {
+          let count = 0;
+          for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+              if (i === 0 && j === 0) continue;
+
+              const newRow = row + i;
+              const newCol = col + j;
+
+              if (
+                newRow >= 0 &&
+                newRow < this.gridSize &&
+                newCol >= 0 &&
+                newCol < this.gridSize
+              ) {
+                if (grid[newRow][newCol] !== 0) {
+                  count++;
+                }
+              }
+            }
+          }
+          return count;
+        }
+
+        getDominantPlayerFromGrid(grid, row, col) {
+          const counts = { 1: 0, 2: 0 };
+
+          for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+              if (i === 0 && j === 0) continue;
+
+              const newRow = row + i;
+              const newCol = col + j;
+
+              if (
+                newRow >= 0 &&
+                newRow < this.gridSize &&
+                newCol >= 0 &&
+                newCol < this.gridSize
+              ) {
+                const player = grid[newRow][newCol];
+                if (player !== 0) {
+                  counts[player]++;
                 }
               }
             }
           }
 
-          // Met à jour le JSON
-          this.jsonGame = newJSONGame;
-          this.syncGridWithJSON(); // Met à jour la grille visuelle
-        }
-
-        getPlayerFromJSON(row, col) {
-          if (this.jsonGame.player1.some(([r, c]) => r === row && c === col))
-            return 1;
-          if (this.jsonGame.player2.some(([r, c]) => r === row && c === col))
-            return 2;
-          return 0;
-        }
-
-        countLiveNeighbors(row, col) {
-          const directions = [
-            [-1, -1],
-            [-1, 0],
-            [-1, 1],
-            [0, -1],
-            [0, 1],
-            [1, -1],
-            [1, 0],
-            [1, 1],
-          ];
-
-          let liveCount = 0;
-          for (let [dx, dy] of directions) {
-            const newRow = row + dx;
-            const newCol = col + dy;
-
-            if (
-              newRow >= 0 &&
-              newRow < this.gridSize &&
-              newCol >= 0 &&
-              newCol < this.gridSize
-            ) {
-              liveCount += this.getPlayerFromJSON(newRow, newCol) !== 0 ? 1 : 0;
-            }
-          }
-
-          return liveCount;
-        }
-
-        determineDominantPlayer(row, col) {
-          const neighborCounts = { player1: 0, player2: 0 };
-
-          const directions = [
-            [-1, -1],
-            [-1, 0],
-            [-1, 1],
-            [0, -1],
-            [0, 1],
-            [1, -1],
-            [1, 0],
-            [1, 1],
-          ];
-
-          for (let [dx, dy] of directions) {
-            const newRow = row + dx;
-            const newCol = col + dy;
-
-            const player = this.getPlayerFromJSON(newRow, newCol);
-            if (player === 1) neighborCounts.player1++;
-            if (player === 2) neighborCounts.player2++;
-          }
-
-          return neighborCounts.player1 >= neighborCounts.player2 ? 1 : 2;
+          return counts[2] > counts[1] ? 2 : 1;
         }
 
         endGame() {
@@ -307,6 +416,14 @@
       `;
 
           gameResult.classList.remove("hidden");
+        }
+
+        // Nouvelle méthode pour mettre à jour l'affichage des pions restants
+        updateBlocksDisplay() {
+          document.getElementById("player1-blocks").textContent =
+            10 - this.playerBlocks[1];
+          document.getElementById("player2-blocks").textContent =
+            10 - this.playerBlocks[2];
         }
       }
     </script>
