@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./node_modules/nes.css/css/nes.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css?family=Press+Start+2P"
+      rel="stylesheet"
+    />
+    <link href="https://unpkg.com/nes.css/css/nes.css" rel="stylesheet" />
+    <title>Mon Profil</title>
+  </head>
+  <body>
+    <main class="min-h-screen min-w-screen p-8">
+      <h1>WebSocket Test</h1>
+      <div>
+        <input
+          id="message"
+          type="text"
+          class="nes-input"
+          placeholder="Tapez un message..."
+        />
+        <button id="sendBtn" class="nes-btn is-primary">Envoyer</button>
+      </div>
+      <div id="messages" class="nes-container with-title">
+        <h3 class="title">Messages reçus</h3>
+        <ul id="messagesList"></ul>
+      </div>
+    </main>
+    <script>
+      const ws = new WebSocket("ws://localhost:8090/messages/");
+      const sendBtn = document.getElementById("sendBtn");
+      const messageInput = document.getElementById("message");
+      const messagesList = document.getElementById("messagesList");
+
+      // se connecte au serveur websocket
+      ws.onopen = function () {
+        console.log("Connexion établie");
+      };
+
+      // reçoit les messages du serveur websocket
+      ws.onmessage = function (event) {
+        const li = document.createElement("li");
+        li.textContent = event.data;
+        messagesList.appendChild(li);
+      };
+
+      // se déconnecte du serveur websocket
+      ws.onclose = function () {
+        console.log("Connexion fermée");
+      };
+
+      // gère les erreurs de connexion
+      ws.onerror = function (error) {
+        console.error("Erreur WebSocket : ", error);
+      };
+
+      // envoie un message au serveur websocket
+      sendBtn.addEventListener("click", function () {
+        const message = messageInput.value;
+        if (message) {
+          ws.send(message); // Envoie le message au serveur WebSocket
+          messageInput.value = ""; // Réinitialise le champ de texte
+        }
+      });
+    </script>
+  </body>
+</html>

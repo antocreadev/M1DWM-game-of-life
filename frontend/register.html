@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./node_modules/nes.css/css/nes.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css?family=Press+Start+2P"
+      rel="stylesheet"
+    />
+    <link href="https://unpkg.com/nes.css/css/nes.css" rel="stylesheet" />
+    <title>Inscription</title>
+  </head>
+  <body>
+    <main class="min-h-screen min-w-screen flex justify-center items-center">
+      <section class="w-1/2">
+        <div class="register-container nes-container">
+          <h2 class="title">Inscription</h2>
+          <form id="registerForm">
+            <div class="form-group">
+              <label for="username">Nom d'utilisateur</label>
+              <input type="text" id="username" class="nes-input" required />
+            </div>
+
+            <div class="form-group">
+              <label for="password">Mot de passe</label>
+              <input type="password" id="password" class="nes-input" required />
+            </div>
+
+            <div
+              id="errorMessage"
+              class="error-message nes-text is-error"
+            ></div>
+
+            <button type="submit" class="nes-btn is-primary">S'inscrire</button>
+            <a href="/login" class="nes-btn">Déjà inscrit ?</a>
+          </form>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/register.js"></script>
+  </body>
+</html>

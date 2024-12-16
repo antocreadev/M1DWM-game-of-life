@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./node_modules/nes.css/css/nes.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css?family=Press+Start+2P"
+      rel="stylesheet"
+    />
+    <link href="https://unpkg.com/nes.css/css/nes.css" rel="stylesheet" />
+    <title>Mon Profil</title>
+  </head>
+  <body>
+    <main class="min-h-screen min-w-screen p-8">
+      <div class="max-w-7xl mx-auto">
+        <section class="mb-8">
+          <div class="profile-container nes-container">
+            <h2 class="title mb-4">Mon Profil</h2>
+            <div class="user-info">
+              <p class="mb-2">Nom d'utilisateur: <span id="username"></span></p>
+              <p>ID: <span id="userId"></span></p>
+            </div>
+          </div>
+          <div class="buttons mt-4">
+            <button id="logoutBtn" class="nes-btn is-error">
+              Se déconnecter
+            </button>
+            <button id="playBtn" class="nes-btn is-success">
+              Lancer une partie
+            </button>
+          </div>
+        </section>
+
+        <section class="mt-8">
+          <div class="nes-container">
+            <h2 class="title mb-4">Classement des joueurs</h2>
+            <div class="overflow-x-auto">
+              <table class="nes-table is-bordered is-centered w-full">
+                <thead>
+                  <tr>
+                    <th class="sortable" data-sort="username">
+                      Nom d'utilisateur
+                    </th>
+                    <th class="sortable" data-sort="elo">Élo</th>
+                    <th class="sortable" data-sort="class">Classe</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                  <!-- Le contenu sera rempli dynamiquement -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./src/services/allUser.js"></script>
+    <script type="module" src="./src/services/userMe.js"></script>
+    <script type="module" src="./src/services/play.js"></script>
+    <script type="module" src="./src/logout.js"></script>
+    <script type="module" src="./src/usersTable.js"></script>
+    <script type="module" src="./src/playerClass.js"></script>
+  </body>
+</html>

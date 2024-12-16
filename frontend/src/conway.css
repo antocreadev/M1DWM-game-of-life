@@ -1,0 +1,66 @@
+body {
+  font-family: Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+  background-color: #f4f4f4;
+}
+
+.game-container {
+  text-align: center;
+  background-color: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#grid-container {
+  display: grid;
+  justify-content: center;
+  gap: 1px;
+  background-color: #ddd;
+  margin: 20px 0;
+}
+
+.cell {
+  width: 20px;
+  height: 20px;
+  border: 1px solid #ccc;
+  background-color: #f9f9f9;
+  transition: background-color 0.3s;
+}
+
+.cell.alive {
+  transition: background-color 0.3s;
+}
+
+.cell.player1 {
+  background-color: rgba(33, 150, 243, 0.7);
+}
+
+.cell.player2 {
+  background-color: rgba(244, 67, 54, 0.7);
+}
+
+.generation-input {
+  display: flex;
+  justify-content: space-around;
+  margin: 20px 0;
+}
+
+.timer {
+  font-weight: bold;
+  color: red;
+}
+
+.hidden {
+  display: none;
+}
+
+#reset-game {
+  padding: 10px 20px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}

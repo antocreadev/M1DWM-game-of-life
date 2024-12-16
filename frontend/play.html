@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://unpkg.com/nes.css/css/nes.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="src/conway.css" />
+    <title>Jeu à deux</title>
+  </head>
+  <body>
+    <main class="nes-container is-rounded">
+      <h1>Jeu à deux</h1>
+      <div id="status" class="nes-text"></div>
+      <div id="gameArea" style="display: none">
+        <div class="game-container">
+          <div class="game-header">
+            <h1>Conway's Game of Life - Multiplayer</h1>
+            <div id="player-turn">Player 1's Turn</div>
+          </div>
+
+          <div id="grid-container"></div>
+
+          <div class="generation-input">
+            <div class="player-input">
+              <h3>Player 1 - Generations</h3>
+              <input type="number" id="player1-generations" min="1" max="100" />
+              <div id="player1-timer" class="timer">30</div>
+            </div>
+            <div class="player-input">
+              <h3>Player 2 - Generations</h3>
+              <input type="number" id="player2-generations" min="1" max="100" />
+              <div id="player2-timer" class="timer">30</div>
+            </div>
+          </div>
+
+          <div id="game-result" class="hidden">
+            <h2 id="winner-announcement"></h2>
+            <div id="player-scores"></div>
+          </div>
+
+          <button id="reset-game">Reset Game</button>
+        </div>
+      </div>
+    </main>
+    <!-- script websocket -->
+    <script>
+      const ws = new WebSocket("ws://localhost:8090/game/");
+      const statusDiv = document.getElementById("status");
+      const gameArea = document.getElementById("gameArea");
+      let myPlayerNumber = null;
+      let game;
+
+      ws.onopen = function () {
+        statusDiv.textContent = "Connexion établie. Recherche d'un joueur...";
+      };
+
+      ws.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+
+        switch (data.type) {
+          case "game_start":
+            statusDiv.textContent = data.message;
+            gameArea.style.display = "block";
+            myPlayerNumber = data.player_number;
+            game = new Conway();
+            break;
+
+          case "game_update":
+            game.jsonGame = data.game_data;
+            game.currentPlayer = data.current_player;
+            game.syncGridWithJSON();
+            game.updateTurnDisplay();
+            break;
+
+          case "waiting":
+            statusDiv.textContent = data.message;
+            break;
+        }
+      };
+
+      ws.onclose = function () {
+        statusDiv.textContent = "Connexion fermée.";
+        gameArea.style.display = "none";
+      };
+
+      ws.onerror = function (error) {
+        console.error("Erreur WebSocket :", error);
+        statusDiv.textContent = "Une erreur est survenue.";
+      };
+    </script>
+    <!-- script conway -->
+    <script>
+      class Conway {
+        constructor(gridSize = 20) {
+          this.gridSize = gridSize;
+
+          // JSON pour suivre les positions des cellules
+          this.jsonGame = {
+            player1: [],
+            player2: [],
+          };
+
+          this.currentPlayer = 1;
+          this.playerBlocks = { 1: 0, 2: 0 };
+          this.generation = 0;
+          this.initializeGrid();
+          this.syncGridWithJSON(); // Initialise la grille selon le JSON
+        }
+
+        initializeGrid() {
+          const gridContainer = document.getElementById("grid-container");
+          gridContainer.style.gridTemplateColumns = `repeat(${this.gridSize}, 20px)`;
+          gridContainer.innerHTML = "";
+
+          for (let i = 0; i < this.gridSize; i++) {
+            for (let j = 0; j < this.gridSize; j++) {
+              const cell = document.createElement("div");
+              cell.classList.add("cell");
+              cell.dataset.row = i;
+              cell.dataset.col = j;
+              cell.addEventListener("click", () => this.toggleCell(i, j));
+              gridContainer.appendChild(cell);
+            }
+          }
+        }
+
+        toggleCell(row, col) {
+          if (this.currentPlayer !== myPlayerNumber) return;
+          if (this.playerBlocks[this.currentPlayer] >= 10) return;
+
+          const cell = document.querySelector(
+            `.cell[data-row="${row}"][data-col="${col}"]`
+          );
+
+          if (!cell.classList.contains("alive")) {
+            cell.classList.add("alive", `player${this.currentPlayer}`);
+            this.jsonGame[`player${this.currentPlayer}`].push([row, col]);
+            this.playerBlocks[this.currentPlayer]++;
+
+            // Envoyer la mise à jour au serveur
+            ws.send(JSON.stringify(this.jsonGame));
+          }
+        }
+
+        switchPlayer() {
+          this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
+        }
+
+        updateTurnDisplay() {
+          const turnDisplay = document.getElementById("player-turn");
+          turnDisplay.textContent = `Player ${this.currentPlayer}'s Turn`;
+        }
+
+        syncGridWithJSON() {
+          // console.log(this.jsonGame);
+          // Réinitialise toutes les cellules
+          document.querySelectorAll(".cell").forEach((cell) => {
+            cell.classList.remove("alive", "player1", "player2");
+          });
+
+          // Parcours du JSON pour activer les cellules
+          for (const [player, positions] of Object.entries(this.jsonGame)) {
+            const playerClass = player === "player1" ? "player1" : "player2";
+
+            positions.forEach(([row, col]) => {
+              const cell = document.querySelector(
+                `.cell[data-row="${row}"][data-col="${col}"]`
+              );
+              if (cell) {
+                cell.classList.add("alive", playerClass);
+              }
+            });
+          }
+        }
+
+        resetGame() {
+          this.jsonGame = { player1: [], player2: [] }; // Réinitialise le JSON
+          this.currentPlayer = 1;
+          this.playerBlocks = { 1: 0, 2: 0 };
+
+          this.syncGridWithJSON(); // Réinitialise la grille visuelle
+          document.getElementById("game-result").classList.add("hidden");
+          this.updateTurnDisplay();
+        }
+
+        runGenerations(generations) {
+          for (let gen = 0; gen < generations; gen++) {
+            setTimeout(() => this.calculateNextGeneration(), gen * 500);
+          }
+
+          setTimeout(() => this.endGame(), generations * 500);
+        }
+
+        calculateNextGeneration() {
+          // Génère un nouveau JSON temporaire
+          const newJSONGame = { player1: [], player2: [] };
+
+          for (let i = 0; i < this.gridSize; i++) {
+            for (let j = 0; j < this.gridSize; j++) {
+              const currentPlayer = this.getPlayerFromJSON(i, j);
+              const liveNeighbors = this.countLiveNeighbors(i, j);
+
+              if (currentPlayer !== 0) {
+                // Cellule vivante
+                if (liveNeighbors >= 2 && liveNeighbors <= 3) {
+                  newJSONGame[`player${currentPlayer}`].push([i, j]);
+                }
+              } else {
+                // Cellule morte
+                if (liveNeighbors === 3) {
+                  const dominantPlayer = this.determineDominantPlayer(i, j);
+                  newJSONGame[`player${dominantPlayer}`].push([i, j]);
+                }
+              }
+            }
+          }
+
+          // Met à jour le JSON
+          this.jsonGame = newJSONGame;
+          this.syncGridWithJSON(); // Met à jour la grille visuelle
+        }
+
+        getPlayerFromJSON(row, col) {
+          if (this.jsonGame.player1.some(([r, c]) => r === row && c === col))
+            return 1;
+          if (this.jsonGame.player2.some(([r, c]) => r === row && c === col))
+            return 2;
+          return 0;
+        }
+
+        countLiveNeighbors(row, col) {
+          const directions = [
+            [-1, -1],
+            [-1, 0],
+            [-1, 1],
+            [0, -1],
+            [0, 1],
+            [1, -1],
+            [1, 0],
+            [1, 1],
+          ];
+
+          let liveCount = 0;
+          for (let [dx, dy] of directions) {
+            const newRow = row + dx;
+            const newCol = col + dy;
+
+            if (
+              newRow >= 0 &&
+              newRow < this.gridSize &&
+              newCol >= 0 &&
+              newCol < this.gridSize
+            ) {
+              liveCount += this.getPlayerFromJSON(newRow, newCol) !== 0 ? 1 : 0;
+            }
+          }
+
+          return liveCount;
+        }
+
+        determineDominantPlayer(row, col) {
+          const neighborCounts = { player1: 0, player2: 0 };
+
+          const directions = [
+            [-1, -1],
+            [-1, 0],
+            [-1, 1],
+            [0, -1],
+            [0, 1],
+            [1, -1],
+            [1, 0],
+            [1, 1],
+          ];
+
+          for (let [dx, dy] of directions) {
+            const newRow = row + dx;
+            const newCol = col + dy;
+
+            const player = this.getPlayerFromJSON(newRow, newCol);
+            if (player === 1) neighborCounts.player1++;
+            if (player === 2) neighborCounts.player2++;
+          }
+
+          return neighborCounts.player1 >= neighborCounts.player2 ? 1 : 2;
+        }
+
+        endGame() {
+          const player1Cells = this.jsonGame.player1.length;
+          const player2Cells = this.jsonGame.player2.length;
+
+          const winnerAnnouncement = document.getElementById(
+            "winner-announcement"
+          );
+          const playerScores = document.getElementById("player-scores");
+          const gameResult = document.getElementById("game-result");
+
+          winnerAnnouncement.textContent =
+            player1Cells > player2Cells
+              ? "Player 1 Wins!"
+              : player2Cells > player1Cells
+              ? "Player 2 Wins!"
+              : "It's a Tie!";
+
+          playerScores.innerHTML = `
+          Player 1: ${player1Cells} cells<br>
+          Player 2: ${player2Cells} cells
+      `;
+
+          gameResult.classList.remove("hidden");
+        }
+      }
+    </script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const game = new Conway();
+
+        document
+          .getElementById("reset-game")
+          .addEventListener("click", () => game.resetGame());
+
+        const generationInputs = document.querySelectorAll(
+          ".generation-input input"
+        );
+
+        const submitButton = document.createElement("button");
+        submitButton.textContent = "Start Generations";
+        submitButton.addEventListener("click", () => {
+          const player1Generations =
+            parseInt(document.getElementById("player1-generations").value) ||
+            null;
+          const player2Generations =
+            parseInt(document.getElementById("player2-generations").value) ||
+            null;
+
+          const avgGenerations =
+            player1Generations !== null && player2Generations !== null
+              ? Math.floor((player1Generations + player2Generations) / 2)
+              : player1Generations || player2Generations || 10;
+
+          game.runGenerations(avgGenerations);
+        });
+
+        document.querySelector(".generation-input").appendChild(submitButton);
+      });
+    </script>
+  </body>
+</html>
