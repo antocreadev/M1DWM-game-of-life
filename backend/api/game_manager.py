@@ -81,9 +81,20 @@ class GameManager:
     async def handle_message(self, websocket: WebSocket, message: str):
         try:
             data = json.loads(message)
-            # Trouver la partie du joueur
             for game_id, players in self.active_games.items():
                 if websocket in players:
+                    if isinstance(data, dict) and "type" in data:
+                        if data["type"] == "game_end":
+                            # Envoyer les résultats aux deux joueurs
+                            response = {
+                                "type": "game_end",
+                                "results": data["results"]
+                            }
+                            await asyncio.gather(
+                                players[0].send_text(json.dumps(response)),
+                                players[1].send_text(json.dumps(response))
+                            )
+                    # Trouver la partie du joueur
                     player_number = 1 if players[0] == websocket else 2
                     game_state = self.game_states[game_id]
                     

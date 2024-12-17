@@ -10,9 +10,10 @@
     />
     <link href="https://unpkg.com/nes.css/css/nes.css" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
+
     <title>Jeu à deux</title>
   </head>
-  <body>
+  <body class="nes-container is-rounded is-dark text-white" style="zoom: 70%">
     <div class="p-4">
       <!-- <h1>Jeu à deux</h1> -->
       <div id="status" class="nes-text"></div>
@@ -20,35 +21,44 @@
         <div>
           <!-- <h2 class="nes-text">Conway's Game of Life - Multiplayer</h2> -->
           <div class="mb-4">
-            <div class="nes-container is-rounded w-1/2">
-              <div id="player-turn" class="nes-text is-primary"></div>
+            <div class="nes-container is-dark is-rounded w-1/2">
+              <div id="player-turn" class="nes-text"></div>
             </div>
           </div>
 
           <div class="flex justify-center gap-4">
-            <div class="nes-container is-rounded w-1/2">
+            <div class="nes-container is-dark is-rounded w-1/2">
               <span id="player1-name">Joueur 1</span>:
-              <span id="player1-blocks" class="nes-text is-primary">10</span>
+              <span id="player1-blocks" class="nes-text">10</span>
               pions restants
             </div>
-            <div class="nes-container is-rounded w-1/2">
+            <div class="nes-container is-dark is-rounded w-1/2">
               <span id="player2-name">Joueur 2</span>:
-              <span id="player2-blocks" class="nes-text is-success">10</span>
+              <span id="player2-blocks" class="nes-text">10</span>
               pions restants
             </div>
           </div>
 
           <div class="m-4">
             <div
-              class="w-full nes-container is-rounded flex items-center justify-center flex-col"
+              class="w-full nes-container is-dark is-rounded flex items-center justify-center flex-col"
             >
               <h1>Grille de jeu :</h1>
-              <div id="grid-container" class="nes-container is-rounded"></div>
+              <button
+                id="start-generations"
+                class="nes-btn is-success mt-4 hidden"
+              >
+                Lancer la génération
+              </button>
+              <div
+                id="grid-container"
+                class="nes-container is-dark is-rounded"
+              ></div>
             </div>
           </div>
 
-          <div class="nes-container is-rounded">
-            <div>
+          <!-- <div class="nes-container is-dark is-rounded"> -->
+          <!-- <div>
               <label for="player1-generations">Player 1 - Generations</label>
               <input
                 type="number"
@@ -69,30 +79,24 @@
                 max="100"
               />
               <div id="player2-timer" class="nes-text">30</div>
-            </div>
-            <button id="start-generations" class="nes-btn is-success mt-4">
-              Start Generations
-            </button>
-          </div>
+            </div> -->
+          <!-- </div> -->
 
-          <div id="game-result" class="nes-container is-rounded hidden">
+          <div id="game-result" class="nes-container is-dark is-rounded hidden">
             <div
               class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
             >
-              <div class="nes-container is-rounded bg-white p-8">
-                <h2
-                  id="winner-announcement"
-                  class="nes-text is-primary text-xl mb-4"
-                ></h2>
+              <div class="nes-container is-dark is-rounded bg-white p-8">
+                <h2 id="winner-announcement" class="nes-text text-xl mb-4"></h2>
                 <div id="player-scores" class="nes-text space-y-2"></div>
-                <button onclick="closeModal()" class="nes-btn is-primary mt-4">
+                <button onclick="closeModal()" class="nes-btn mt-4">
                   Fermer
                 </button>
               </div>
             </div>
           </div>
 
-          <button id="reset-game" class="nes-btn is-primary">Reset Game</button>
+          <!-- <button id="reset-game" class="nes-btn is-primary">Reset Game</button> -->
         </div>
       </div>
     </div>
@@ -161,6 +165,33 @@
           case "waiting":
             statusDiv.textContent = data.message;
             break;
+
+          case "game_end":
+            const { player1Cells, player2Cells } = data.results;
+            const winnerAnnouncement = document.getElementById(
+              "winner-announcement"
+            );
+            const playerScores = document.getElementById("player-scores");
+            const gameResult = document.getElementById("game-result");
+
+            const winner =
+              player1Cells > player2Cells
+                ? playerUsernames.player1
+                : player2Cells > player1Cells
+                ? playerUsernames.player2
+                : null;
+
+            winnerAnnouncement.textContent = winner
+              ? `${winner} gagne !`
+              : "Match nul !";
+
+            playerScores.innerHTML = `
+              <div>${playerUsernames.player1}: ${player1Cells} cellules</div>
+              <div>${playerUsernames.player2}: ${player2Cells} cellules</div>
+            `;
+
+            gameResult.classList.remove("hidden");
+            break;
         }
       };
 
@@ -207,11 +238,10 @@
             for (let j = 0; j < this.gridSize; j++) {
               const cell = document.createElement("div");
               cell.classList.add("nes-btn");
-              cell.classList.add("is-primary");
               cell.style.aspectRatio = "1/1";
               cell.style.padding = "0";
               cell.style.minWidth = "0";
-              cell.style.minHeight = "10px";
+              cell.style.minHeight = "5px";
               cell.dataset.row = i;
               cell.dataset.col = j;
               cell.addEventListener("click", () => this.toggleCell(i, j));
@@ -237,11 +267,11 @@
 
           if (
             !cell.classList.contains("is-success") &&
-            !cell.classList.contains("is-warning")
+            !cell.classList.contains("is-error")
           ) {
-            cell.classList.remove("is-primary");
+            // cell.classList.remove("is-primary");
             cell.classList.add(
-              this.currentPlayer === 1 ? "is-success" : "is-warning"
+              this.currentPlayer === 1 ? "is-success" : "is-error"
             );
 
             const position = [row, col];
@@ -277,31 +307,39 @@
 
         syncGridWithJSON() {
           console.log("Synchronisation avec JSON:", this.jsonGame);
-          this.playerBlocks = { 1: 0, 2: 0 };
+
+          // Ne mettre à jour les compteurs de blocs que si nous ne sommes pas en mode génération
+          if (this.generation === 0) {
+            this.playerBlocks = { 1: 0, 2: 0 };
+          }
 
           document.querySelectorAll(".nes-btn").forEach((cell) => {
-            cell.classList.remove("is-success", "is-warning");
-            cell.classList.add("is-primary");
+            cell.classList.remove("is-success", "is-error");
           });
 
           for (const [player, positions] of Object.entries(this.jsonGame)) {
             const playerNumber = player === "player1" ? 1 : 2;
-            const playerClass =
-              playerNumber === 1 ? "is-success" : "is-warning";
-            this.playerBlocks[playerNumber] = positions.length;
+            const playerClass = playerNumber === 1 ? "is-success" : "is-error";
+
+            // Ne mettre à jour les compteurs de blocs que si nous ne sommes pas en mode génération
+            if (this.generation === 0) {
+              this.playerBlocks[playerNumber] = positions.length;
+            }
 
             positions.forEach(([row, col]) => {
               const cell = document.querySelector(
                 `.nes-btn[data-row="${row}"][data-col="${col}"]`
               );
               if (cell) {
-                cell.classList.remove("is-primary");
                 cell.classList.add(playerClass);
               }
             });
           }
 
-          this.updateBlocksDisplay();
+          // Ne mettre à jour l'affichage des blocs que si nous ne sommes pas en mode génération
+          if (this.generation === 0) {
+            this.updateBlocksDisplay();
+          }
           console.log("Blocs après sync:", this.playerBlocks);
         }
 
@@ -326,6 +364,7 @@
         }
 
         runGenerations(generations) {
+          this.generation = 1; // Marquer le début des générations
           // Récupérer l'état actuel depuis la grille
           const currentState = {
             player1: [],
@@ -339,7 +378,7 @@
 
             if (cell.classList.contains("is-success")) {
               currentState.player1.push([row, col]);
-            } else if (cell.classList.contains("is-warning")) {
+            } else if (cell.classList.contains("is-error")) {
               currentState.player2.push([row, col]);
             }
           });
@@ -494,67 +533,38 @@
           const player1Cells = this.jsonGame.player1.length;
           const player2Cells = this.jsonGame.player2.length;
 
-          const winnerAnnouncement = document.getElementById(
-            "winner-announcement"
-          );
-          const playerScores = document.getElementById("player-scores");
-          const gameResult = document.getElementById("game-result");
-
-          const winner =
-            player1Cells > player2Cells
-              ? playerUsernames.player1
-              : player2Cells > player1Cells
-              ? playerUsernames.player2
-              : null;
-
-          winnerAnnouncement.textContent = winner
-            ? `${winner} gagne !`
-            : "Match nul !";
-
-          playerScores.innerHTML = `
-            <div>${playerUsernames.player1}: ${player1Cells} cellules</div>
-            <div>${playerUsernames.player2}: ${player2Cells} cellules</div>
-          `;
-
-          gameResult.classList.remove("hidden");
+          // Envoyer les résultats au serveur
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                type: "game_end",
+                results: {
+                  player1Cells,
+                  player2Cells,
+                },
+              })
+            );
+          }
+          this.generation = 0; // Réinitialiser le compteur de génération
         }
 
         // Nouvelle méthode pour mettre à jour l'affichage des pions restants
         updateBlocksDisplay() {
+          const startGenerationsBtn =
+            document.getElementById("start-generations");
+          if (this.playerBlocks[1] === 10 && this.playerBlocks[2] === 10) {
+            startGenerationsBtn.classList.remove("hidden");
+            startGenerationsBtn.onclick = () => {
+              console.log("Démarrage des générations...");
+              this.runGenerations(10);
+            };
+          }
           document.getElementById("player1-blocks").textContent =
             10 - this.playerBlocks[1];
           document.getElementById("player2-blocks").textContent =
             10 - this.playerBlocks[2];
         }
       }
-    </script>
-
-    <script>
-      document.addEventListener("DOMContentLoaded", () => {
-        const game = new Conway();
-
-        document
-          .getElementById("reset-game")
-          .addEventListener("click", () => game.resetGame());
-
-        document
-          .getElementById("start-generations")
-          .addEventListener("click", () => {
-            const player1Generations =
-              parseInt(document.getElementById("player1-generations").value) ||
-              null;
-            const player2Generations =
-              parseInt(document.getElementById("player2-generations").value) ||
-              null;
-
-            const avgGenerations =
-              player1Generations !== null && player2Generations !== null
-                ? Math.floor((player1Generations + player2Generations) / 2)
-                : player1Generations || player2Generations || 10;
-
-            game.runGenerations(avgGenerations);
-          });
-      });
     </script>
 
     <script>
