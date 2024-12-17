@@ -10,6 +10,7 @@ class GameManager:
         self.active_games: Dict[str, List[WebSocket]] = {}
         self.waiting_players: List[WebSocket] = []
         self.game_states: Dict[str, Dict] = {}  # Pour stocker l'état de chaque partie
+        self.generation_states: Dict[str, Dict] = {}  # Pour stocker l'état des générations
 
     async def add_player(self, websocket: WebSocket):
         await websocket.accept()
@@ -68,21 +69,34 @@ class GameManager:
                     player_number = 1 if players[0] == websocket else 2
                     game_state = self.game_states[game_id]
                     
-                    # Vérifier si c'est le tour du joueur
-                    if game_state["current_player"] == player_number:
-                        # Mettre à jour l'état du jeu
+                    if isinstance(data, dict) and "type" in data and data["type"] == "move":
+                        # Vérifier si c'est le tour du joueur
+                        if game_state["current_player"] == player_number:
+                            # Mettre à jour l'état du jeu
+                            game_state["game_data"] = data["game_data"]
+                            # Changer de joueur
+                            game_state["current_player"] = 3 - player_number  # Alterne entre 1 et 2
+                    else:
+                        # C'est une mise à jour de génération, pas besoin de vérifier le tour
                         game_state["game_data"] = data
-                        # Changer de joueur
-                        game_state["current_player"] = 3 - player_number  # Alterne entre 1 et 2
-                        
-                        # Envoyer la mise à jour aux deux joueurs
-                        response = {
-                            "type": "game_update",
-                            "game_data": data,
-                            "current_player": game_state["current_player"]
-                        }
-                        await players[0].send_text(json.dumps(response))
-                        await players[1].send_text(json.dumps(response))
+
+                    # Envoyer la mise à jour aux deux joueurs
+                    response = {
+                        "type": "game_update",
+                        "game_data": game_state["game_data"],
+                        "current_player": game_state["current_player"]
+                    }
+                    
+                    # Envoyer aux deux joueurs
+                    await asyncio.gather(
+                        players[0].send_text(json.dumps(response)),
+                        players[1].send_text(json.dumps(response))
+                    )
                     break
+                    
         except json.JSONDecodeError:
+            print("Erreur de décodage JSON:", message)
+            pass
+        except Exception as e:
+            print("Erreur lors du traitement du message:", str(e))
             pass

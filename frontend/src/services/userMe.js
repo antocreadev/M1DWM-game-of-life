@@ -16,6 +16,8 @@ async function fetchUserInfo() {
     console.log(userData);
     document.getElementById("username").textContent = userData.username;
     document.getElementById("userId").textContent = userData.id;
+    // ajoute dans le localstorale le username
+    localStorage.setItem("username", userData.username);
   } catch (err) {
     console.error(err);
     window.location.href = "/login";

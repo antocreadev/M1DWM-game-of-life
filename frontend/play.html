@@ -4,66 +4,85 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="https://unpkg.com/nes.css/css/nes.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="src/conway.css" />
+    <link
+      href="https://fonts.googleapis.com/css?family=Press+Start+2P"
+      rel="stylesheet"
+    />
+    <link href="https://unpkg.com/nes.css/css/nes.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <title>Jeu à deux</title>
-    <style>
-      .remaining-blocks {
-        margin: 10px 0;
-        font-size: 1.1em;
-        display: flex;
-        justify-content: space-around;
-      }
-
-      .remaining-blocks div {
-        padding: 5px 10px;
-        border-radius: 5px;
-        background-color: #f0f0f0;
-      }
-    </style>
   </head>
   <body>
-    <main class="nes-container is-rounded">
-      <h1>Jeu à deux</h1>
+    <div class="p-4">
+      <!-- <h1>Jeu à deux</h1> -->
       <div id="status" class="nes-text"></div>
       <div id="gameArea" style="display: none">
-        <div class="game-container">
-          <div class="game-header">
-            <h1>Conway's Game of Life - Multiplayer</h1>
-            <div id="player-turn">Player 1's Turn</div>
-            <div class="remaining-blocks">
-              <div>
-                Joueur 1: <span id="player1-blocks">10</span> pions restants
-              </div>
-              <div>
-                Joueur 2: <span id="player2-blocks">10</span> pions restants
-              </div>
+        <div class="nes-container is-rounded">
+          <h2 class="nes-text">Conway's Game of Life - Multiplayer</h2>
+          <div id="player-turn" class="nes-text is-primary"></div>
+
+          <div class="nes-container is-rounded">
+            <div class="nes-container is-rounded">
+              Joueur 1:
+              <span id="player1-blocks" class="nes-text is-primary">10</span>
+              pions restants
+            </div>
+            <div class="nes-container is-rounded">
+              Joueur 2:
+              <span id="player2-blocks" class="nes-text is-success">10</span>
+              pions restants
             </div>
           </div>
 
-          <div id="grid-container"></div>
+          <div id="grid-container" class="nes-container is-rounded"></div>
 
-          <div class="generation-input">
-            <div class="player-input">
-              <h3>Player 1 - Generations</h3>
-              <input type="number" id="player1-generations" min="1" max="100" />
-              <div id="player1-timer" class="timer">30</div>
+          <div class="nes-container is-rounded">
+            <div>
+              <label for="player1-generations">Player 1 - Generations</label>
+              <input
+                type="number"
+                id="player1-generations"
+                class="nes-input"
+                min="1"
+                max="100"
+              />
+              <div id="player1-timer" class="nes-text">30</div>
             </div>
-            <div class="player-input">
-              <h3>Player 2 - Generations</h3>
-              <input type="number" id="player2-generations" min="1" max="100" />
-              <div id="player2-timer" class="timer">30</div>
+            <div>
+              <label for="player2-generations">Player 2 - Generations</label>
+              <input
+                type="number"
+                id="player2-generations"
+                class="nes-input"
+                min="1"
+                max="100"
+              />
+              <div id="player2-timer" class="nes-text">30</div>
             </div>
+            <button id="start-generations" class="nes-btn is-success mt-4">
+              Start Generations
+            </button>
           </div>
 
-          <div id="game-result" class="hidden">
-            <h2 id="winner-announcement"></h2>
-            <div id="player-scores"></div>
+          <div id="game-result" class="nes-container is-rounded hidden">
+            <h2 id="winner-announcement" class="nes-text is-primary"></h2>
+            <div id="player-scores" class="nes-text"></div>
           </div>
 
-          <button id="reset-game">Reset Game</button>
+          <button id="reset-game" class="nes-btn is-primary">Reset Game</button>
         </div>
       </div>
-    </main>
+    </div>
+
+    <!-- verifie s'il est connecté -->
+    <script>
+      const token = localStorage.getItem("token");
+      if (!token) {
+        // window.location.href = "/login";
+      }
+      const username = localStorage.getItem("username");
+    </script>
+
     <!-- script websocket -->
     <script>
       const ws = new WebSocket("ws://localhost:8090/game/");
@@ -83,17 +102,22 @@
         switch (data.type) {
           case "game_start":
             statusDiv.textContent = data.message;
+            statusDiv.style.display = "none";
             gameArea.style.display = "block";
             myPlayerNumber = data.player_number;
             game = new Conway();
+            game.currentPlayer = 1;
+            game.updateTurnDisplay();
             break;
 
           case "game_update":
             console.log("Mise à jour du jeu:", data.game_data);
-            game.jsonGame = data.game_data;
-            game.currentPlayer = data.current_player;
-            game.syncGridWithJSON();
-            game.updateTurnDisplay();
+            if (data.game_data) {
+              game.jsonGame = data.game_data;
+              game.currentPlayer = data.current_player;
+              game.syncGridWithJSON();
+              game.updateTurnDisplay();
+            }
             break;
 
           case "waiting":
@@ -131,13 +155,25 @@
 
         initializeGrid() {
           const gridContainer = document.getElementById("grid-container");
-          gridContainer.style.gridTemplateColumns = `repeat(${this.gridSize}, 20px)`;
+          gridContainer.style.display = "grid";
+          gridContainer.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
+          gridContainer.style.gap = "2px";
+          gridContainer.style.width = "700px";
+          gridContainer.style.height = "700px";
+
+          gridContainer.style.margin = "10px auto";
+
           gridContainer.innerHTML = "";
 
           for (let i = 0; i < this.gridSize; i++) {
             for (let j = 0; j < this.gridSize; j++) {
               const cell = document.createElement("div");
-              cell.classList.add("cell");
+              cell.classList.add("nes-btn");
+              cell.classList.add("is-primary");
+              cell.style.aspectRatio = "1/1";
+              cell.style.padding = "0";
+              cell.style.minWidth = "0";
+              cell.style.minHeight = "10px";
               cell.dataset.row = i;
               cell.dataset.col = j;
               cell.addEventListener("click", () => this.toggleCell(i, j));
@@ -147,21 +183,32 @@
         }
 
         toggleCell(row, col) {
-          if (this.currentPlayer !== myPlayerNumber) return;
-          if (this.playerBlocks[this.currentPlayer] >= 10) return;
+          if (this.currentPlayer !== myPlayerNumber) {
+            console.log("Ce n'est pas votre tour");
+            return;
+          }
+
+          if (this.playerBlocks[this.currentPlayer] >= 10) {
+            console.log("Vous avez utilisé tous vos pions");
+            return;
+          }
 
           const cell = document.querySelector(
-            `.cell[data-row="${row}"][data-col="${col}"]`
+            `.nes-btn[data-row="${row}"][data-col="${col}"]`
           );
 
-          if (!cell.classList.contains("alive")) {
-            cell.classList.add("alive", `player${this.currentPlayer}`);
+          if (
+            !cell.classList.contains("is-success") &&
+            !cell.classList.contains("is-warning")
+          ) {
+            cell.classList.remove("is-primary");
+            cell.classList.add(
+              this.currentPlayer === 1 ? "is-success" : "is-warning"
+            );
 
-            // Mise à jour du JSON
             const position = [row, col];
             const playerKey = `player${this.currentPlayer}`;
 
-            // Vérifier si la position n'existe pas déjà
             if (
               !this.jsonGame[playerKey].some(([r, c]) => r === row && c === col)
             ) {
@@ -169,8 +216,12 @@
               this.playerBlocks[this.currentPlayer]++;
               this.updateBlocksDisplay();
 
-              console.log("JSON après placement:", this.jsonGame);
-              ws.send(JSON.stringify(this.jsonGame));
+              const updateData = {
+                type: "move",
+                game_data: this.jsonGame,
+                current_player: this.currentPlayer,
+              };
+              ws.send(JSON.stringify(updateData));
             }
           }
         }
@@ -186,29 +237,26 @@
 
         syncGridWithJSON() {
           console.log("Synchronisation avec JSON:", this.jsonGame);
-
-          // Réinitialise les compteurs de blocs
           this.playerBlocks = { 1: 0, 2: 0 };
 
-          // Réinitialise toutes les cellules
-          document.querySelectorAll(".cell").forEach((cell) => {
-            cell.classList.remove("alive", "player1", "player2");
+          document.querySelectorAll(".nes-btn").forEach((cell) => {
+            cell.classList.remove("is-success", "is-warning");
+            cell.classList.add("is-primary");
           });
 
-          // Parcours du JSON pour activer les cellules
           for (const [player, positions] of Object.entries(this.jsonGame)) {
             const playerNumber = player === "player1" ? 1 : 2;
-            const playerClass = `player${playerNumber}`;
-
-            // Met à jour le compteur de blocs pour ce joueur
+            const playerClass =
+              playerNumber === 1 ? "is-success" : "is-warning";
             this.playerBlocks[playerNumber] = positions.length;
 
             positions.forEach(([row, col]) => {
               const cell = document.querySelector(
-                `.cell[data-row="${row}"][data-col="${col}"]`
+                `.nes-btn[data-row="${row}"][data-col="${col}"]`
               );
               if (cell) {
-                cell.classList.add("alive", playerClass);
+                cell.classList.remove("is-primary");
+                cell.classList.add(playerClass);
               }
             });
           }
@@ -245,19 +293,24 @@
           };
 
           // Parcourir toutes les cellules pour reconstruire l'état
-          document.querySelectorAll(".cell").forEach((cell) => {
+          document.querySelectorAll(".nes-btn").forEach((cell) => {
             const row = parseInt(cell.dataset.row);
             const col = parseInt(cell.dataset.col);
 
-            if (cell.classList.contains("player1")) {
+            if (cell.classList.contains("is-success")) {
               currentState.player1.push([row, col]);
-            } else if (cell.classList.contains("player2")) {
+            } else if (cell.classList.contains("is-warning")) {
               currentState.player2.push([row, col]);
             }
           });
 
           // Mettre à jour this.jsonGame avec l'état actuel
           this.jsonGame = currentState;
+
+          // Envoyer l'état initial au serveur
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(this.jsonGame));
+          }
 
           console.log("Début des générations avec état:", this.jsonGame);
 
@@ -339,7 +392,11 @@
           console.log("Nouvel état calculé:", newState);
           this.jsonGame = newState;
           this.syncGridWithJSON();
-          ws.send(JSON.stringify(this.jsonGame));
+
+          // Envoyer le nouvel état au serveur via WebSocket
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(this.jsonGame));
+          }
         }
 
         countLiveNeighborsFromGrid(grid, row, col) {
@@ -436,29 +493,23 @@
           .getElementById("reset-game")
           .addEventListener("click", () => game.resetGame());
 
-        const generationInputs = document.querySelectorAll(
-          ".generation-input input"
-        );
+        document
+          .getElementById("start-generations")
+          .addEventListener("click", () => {
+            const player1Generations =
+              parseInt(document.getElementById("player1-generations").value) ||
+              null;
+            const player2Generations =
+              parseInt(document.getElementById("player2-generations").value) ||
+              null;
 
-        const submitButton = document.createElement("button");
-        submitButton.textContent = "Start Generations";
-        submitButton.addEventListener("click", () => {
-          const player1Generations =
-            parseInt(document.getElementById("player1-generations").value) ||
-            null;
-          const player2Generations =
-            parseInt(document.getElementById("player2-generations").value) ||
-            null;
+            const avgGenerations =
+              player1Generations !== null && player2Generations !== null
+                ? Math.floor((player1Generations + player2Generations) / 2)
+                : player1Generations || player2Generations || 10;
 
-          const avgGenerations =
-            player1Generations !== null && player2Generations !== null
-              ? Math.floor((player1Generations + player2Generations) / 2)
-              : player1Generations || player2Generations || 10;
-
-          game.runGenerations(avgGenerations);
-        });
-
-        document.querySelector(".generation-input").appendChild(submitButton);
+            game.runGenerations(avgGenerations);
+          });
       });
     </script>
   </body>
