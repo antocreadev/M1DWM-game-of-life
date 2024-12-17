@@ -17,24 +17,35 @@
       <!-- <h1>Jeu à deux</h1> -->
       <div id="status" class="nes-text"></div>
       <div id="gameArea" style="display: none">
-        <div class="nes-container is-rounded">
-          <h2 class="nes-text">Conway's Game of Life - Multiplayer</h2>
-          <div id="player-turn" class="nes-text is-primary"></div>
+        <div>
+          <!-- <h2 class="nes-text">Conway's Game of Life - Multiplayer</h2> -->
+          <div class="mb-4">
+            <div class="nes-container is-rounded w-1/2">
+              <div id="player-turn" class="nes-text is-primary"></div>
+            </div>
+          </div>
 
-          <div class="nes-container is-rounded">
-            <div class="nes-container is-rounded">
-              Joueur 1:
+          <div class="flex justify-center gap-4">
+            <div class="nes-container is-rounded w-1/2">
+              <span id="player1-name">Joueur 1</span>:
               <span id="player1-blocks" class="nes-text is-primary">10</span>
               pions restants
             </div>
-            <div class="nes-container is-rounded">
-              Joueur 2:
+            <div class="nes-container is-rounded w-1/2">
+              <span id="player2-name">Joueur 2</span>:
               <span id="player2-blocks" class="nes-text is-success">10</span>
               pions restants
             </div>
           </div>
 
-          <div id="grid-container" class="nes-container is-rounded"></div>
+          <div class="m-4">
+            <div
+              class="w-full nes-container is-rounded flex items-center justify-center flex-col"
+            >
+              <h1>Grille de jeu :</h1>
+              <div id="grid-container" class="nes-container is-rounded"></div>
+            </div>
+          </div>
 
           <div class="nes-container is-rounded">
             <div>
@@ -65,8 +76,20 @@
           </div>
 
           <div id="game-result" class="nes-container is-rounded hidden">
-            <h2 id="winner-announcement" class="nes-text is-primary"></h2>
-            <div id="player-scores" class="nes-text"></div>
+            <div
+              class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+            >
+              <div class="nes-container is-rounded bg-white p-8">
+                <h2
+                  id="winner-announcement"
+                  class="nes-text is-primary text-xl mb-4"
+                ></h2>
+                <div id="player-scores" class="nes-text space-y-2"></div>
+                <button onclick="closeModal()" class="nes-btn is-primary mt-4">
+                  Fermer
+                </button>
+              </div>
+            </div>
           </div>
 
           <button id="reset-game" class="nes-btn is-primary">Reset Game</button>
@@ -90,8 +113,15 @@
       const gameArea = document.getElementById("gameArea");
       let myPlayerNumber = null;
       let game;
+      let playerUsernames = {
+        player1: "",
+        player2: "",
+      };
 
       ws.onopen = function () {
+        // Envoyer le username au serveur lors de la connexion
+        const username = localStorage.getItem("username") || "Anonyme";
+        ws.send(JSON.stringify({ username: username }));
         statusDiv.textContent = "Connexion établie. Recherche d'un joueur...";
       };
 
@@ -105,6 +135,14 @@
             statusDiv.style.display = "none";
             gameArea.style.display = "block";
             myPlayerNumber = data.player_number;
+
+            // Mettre à jour les noms des joueurs
+            playerUsernames = data.usernames;
+            document.getElementById("player1-name").textContent =
+              data.usernames.player1;
+            document.getElementById("player2-name").textContent =
+              data.usernames.player2;
+
             game = new Conway();
             game.currentPlayer = 1;
             game.updateTurnDisplay();
@@ -232,7 +270,9 @@
 
         updateTurnDisplay() {
           const turnDisplay = document.getElementById("player-turn");
-          turnDisplay.textContent = `Player ${this.currentPlayer}'s Turn`;
+          const currentPlayerUsername =
+            playerUsernames[`player${this.currentPlayer}`];
+          turnDisplay.textContent = `Tour de ${currentPlayerUsername}`;
         }
 
         syncGridWithJSON() {
@@ -460,17 +500,21 @@
           const playerScores = document.getElementById("player-scores");
           const gameResult = document.getElementById("game-result");
 
-          winnerAnnouncement.textContent =
+          const winner =
             player1Cells > player2Cells
-              ? "Player 1 Wins!"
+              ? playerUsernames.player1
               : player2Cells > player1Cells
-              ? "Player 2 Wins!"
-              : "It's a Tie!";
+              ? playerUsernames.player2
+              : null;
+
+          winnerAnnouncement.textContent = winner
+            ? `${winner} gagne !`
+            : "Match nul !";
 
           playerScores.innerHTML = `
-          Player 1: ${player1Cells} cells<br>
-          Player 2: ${player2Cells} cells
-      `;
+            <div>${playerUsernames.player1}: ${player1Cells} cellules</div>
+            <div>${playerUsernames.player2}: ${player2Cells} cellules</div>
+          `;
 
           gameResult.classList.remove("hidden");
         }
@@ -511,6 +555,12 @@
             game.runGenerations(avgGenerations);
           });
       });
+    </script>
+
+    <script>
+      function closeModal() {
+        document.getElementById("game-result").classList.add("hidden");
+      }
     </script>
   </body>
 </html>

@@ -14,29 +14,47 @@ class GameManager:
 
     async def add_player(self, websocket: WebSocket):
         await websocket.accept()
-        self.waiting_players.append(websocket)
+        
+        # Attendre de recevoir le username
+        init_data = await websocket.receive_text()
+        player_data = json.loads(init_data)
+        username = player_data.get('username', 'Anonyme')
+        
+        self.waiting_players.append((websocket, username))
         
         if len(self.waiting_players) >= 2:
-            player1 = self.waiting_players.pop(0)
-            player2 = self.waiting_players.pop(0)
+            player1, username1 = self.waiting_players.pop(0)
+            player2, username2 = self.waiting_players.pop(0)
             
             game_id = f"game_{len(self.active_games) + 1}"
             self.active_games[game_id] = [player1, player2]
             self.game_states[game_id] = {
                 "current_player": 1,
-                "game_data": {"player1": [], "player2": []}
+                "game_data": {"player1": [], "player2": []},
+                "usernames": {
+                    "player1": username1,
+                    "player2": username2
+                }
             }
             
-            # Notifier les joueurs avec leur numéro
+            # Notifier les joueurs avec leur numéro et les usernames
             await player1.send_text(json.dumps({
                 "type": "game_start",
                 "player_number": 1,
-                "message": "Partie trouvée ! Vous êtes le joueur 1"
+                "message": f"Partie trouvée ! Vous êtes {username1}",
+                "usernames": {
+                    "player1": username1,
+                    "player2": username2
+                }
             }))
             await player2.send_text(json.dumps({
                 "type": "game_start",
                 "player_number": 2,
-                "message": "Partie trouvée ! Vous êtes le joueur 2"
+                "message": f"Partie trouvée ! Vous êtes {username2}",
+                "usernames": {
+                    "player1": username1,
+                    "player2": username2
+                }
             }))
         else:
             await websocket.send_text(json.dumps({
