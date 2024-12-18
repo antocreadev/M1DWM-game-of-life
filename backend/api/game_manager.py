@@ -80,9 +80,17 @@ class GameManager:
 
     async def handle_message(self, websocket: WebSocket, message: str):
         try:
-            data = json.loads(message)
+            if message != "start_generations":
+                data = json.loads(message)
+    
             for game_id, players in self.active_games.items():
                 if websocket in players:
+                    if message == "start_generations":
+                        # envoie un message au joueur 1 et au joueur 2
+                        await asyncio.gather(
+                            players[0].send_text(json.dumps({"type": "start_generations"})),
+                            players[1].send_text(json.dumps({"type": "start_generations"}))
+                        )
                     if isinstance(data, dict) and "type" in data:
                         if data["type"] == "game_end":
                             # Envoyer les résultats aux deux joueurs
