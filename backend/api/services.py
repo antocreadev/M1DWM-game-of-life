@@ -113,3 +113,15 @@ async def get_current_user(
 
 
 
+async def update_elo(db: Session, user_add: str, user_remove: str):
+    """
+    Cette fonction permet de mettre à jour le élo d'un joueur
+    @param db: Session
+    @param user_add: str
+    @param user_remove: str
+    @return None
+    """
+    db.query(models.User).filter(models.User.username == user_add).update({"elo": models.User.elo + 100})
+    db.query(models.User).filter(models.User.username == user_remove).update({"elo": models.User.elo - 100})
+    db.commit()
+    return {"message": "Elo updated successfully"}

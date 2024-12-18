@@ -80,7 +80,7 @@ class GameManager:
 
     async def handle_message(self, websocket: WebSocket, message: str):
         try:
-            if message != "start_generations":
+            if message != "start_generations" and message != "finish_game":
                 data = json.loads(message)
     
             for game_id, players in self.active_games.items():
@@ -90,6 +90,11 @@ class GameManager:
                         await asyncio.gather(
                             players[0].send_text(json.dumps({"type": "start_generations"})),
                             players[1].send_text(json.dumps({"type": "start_generations"}))
+                        )
+                    if message == "finish_game":
+                        await asyncio.gather(
+                            players[0].send_text(json.dumps({"type": "finish_game"})),
+                            players[1].send_text(json.dumps({"type": "finish_game"}))
                         )
                     if isinstance(data, dict) and "type" in data:
                         if data["type"] == "game_end":

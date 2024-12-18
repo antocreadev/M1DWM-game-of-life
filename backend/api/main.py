@@ -119,6 +119,16 @@ async def read_users_me(
 ):
     return current_user
 
+# route pour rajoute +100 au élo d'un joueur et -100 au élo d'un autre joueur
+@app.patch("/users/elo/{user_add}/{user_remove}", tags=["Users"])
+async def update_elo(
+    user_add: str,
+    user_remove: str,
+    db: Session = Depends(services.get_db)
+):
+    return await services.update_elo(db, user_add, user_remove)
+
+
 websocket_manager = WebsocketManager()
 @app.websocket("/messages/")
 async def websocket_endpoint(websocket: WebSocket):

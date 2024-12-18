@@ -122,6 +122,9 @@
 
     <!-- script websocket -->
     <script>
+      let match_null = false;
+      let winner = null;
+      let loser = null;
       const ws = new WebSocket("ws://localhost:8090/game/");
       const statusDiv = document.getElementById("status");
       const gameArea = document.getElementById("gameArea");
@@ -166,6 +169,11 @@
             console.log("start_generations");
             document.getElementById("start-generations").style.display = "none";
             break;
+          case "finish_game":
+            console.log("finish_game");
+            document.body.innerHTML = "";
+            window.location.replace("http://localhost:5173/");
+            break;
 
           case "game_update":
             console.log("Mise à jour du jeu:", data.game_data);
@@ -188,17 +196,25 @@
             );
             const playerScores = document.getElementById("player-scores");
             const gameResult = document.getElementById("game-result");
-
-            const winner =
+            winner =
               player1Cells > player2Cells
                 ? playerUsernames.player1
                 : player2Cells > player1Cells
                 ? playerUsernames.player2
                 : null;
 
+            if (winner === null) {
+              match_null = true;
+            }
+
             winnerAnnouncement.textContent = winner
               ? `${winner} gagne !`
               : "Match nul !";
+
+            loser =
+              playerUsernames.player1 === winner
+                ? playerUsernames.player2
+                : playerUsernames.player1;
 
             playerScores.innerHTML = `
               <div>${playerUsernames.player1}: ${player1Cells} cellules</div>
@@ -601,6 +617,18 @@
     <script>
       function closeModal() {
         document.getElementById("game-result").classList.add("hidden");
+        if (match_null) {
+          console.log("match null");
+        } else {
+          console.log("winner, loser", winner, loser);
+          fetch(`http://localhost:8090/users/elo/${winner}/${loser}`, {
+            method: "PATCH",
+            headers: {
+              accept: "application/json",
+            },
+          });
+        }
+        ws.send("finish_game");
       }
     </script>
   </body>
