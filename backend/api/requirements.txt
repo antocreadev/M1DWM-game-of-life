@@ -1,11 +1,12 @@
-fastapi==0.109.2
-pydantic==2.6.0
-uvicorn==0.27.0
-python-dotenv==1.0.1
-aiofiles==23.2.1
+fastapi
+pydantic
+uvicorn[standard]
+python-dotenv
+aiofiles
 sqlalchemy
 passlib
 psycopg2-binary
 python-multipart
 python-jose
 bcrypt
+websockets

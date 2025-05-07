@@ -1,7 +1,7 @@
-run:
+run-db:
 	docker compose up -d --build
 
-clean:
+clean-db:
 	docker compose down
 
 .PHONY: run clean

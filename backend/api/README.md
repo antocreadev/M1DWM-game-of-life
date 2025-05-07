@@ -23,7 +23,7 @@ pip3 install -r requirements.txt
 4. Run the application
 
 ```bash
-make run
+cd .. && make run
 ```
 
 5. Open the browser and go to http://127.0.0.1:8090/docs
