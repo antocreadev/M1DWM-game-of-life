@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./node_modules/nes.css/css/nes.min.css" />
+    <link
+      href="https://fonts.googleapis.com/css?family=Press+Start+2P"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <title>Jeu contre l'ordinateur</title>
+  </head>
+  <body class="nes-container is-rounded is-dark text-white" style="zoom: 65%">
+    <div class="p-4">
+      <div class="flex items-center justify-center gap-4 mb-4">
+        <a href="/" class="nes-btn">Retour à l'accueil</a>
+      </div>
+
+      <div id="gameArea">
+        <div>
+          <div class="flex items-center justify-center gap-4 mb-4">
+            <h2 class="nes-text is-primary">Jeu contre l'ordinateur</h2>
+          </div>
+
+          <div class="flex items-center justify-center gap-4 mb-4">
+            <div class="nes-container is-dark is-rounded w-full text-center">
+              <div>
+                <label for="difficulty">Niveau de difficulté:</label>
+                <div class="nes-select mb-4">
+                  <select id="difficulty" class="text-black">
+                    <option value="minmax">Facile (MinMax)</option>
+                    <option value="alphabeta">Difficile (AlphaBeta)</option>
+                  </select>
+                </div>
+                <div class="mb-2">
+                  <span class="nes-text is-warning">Facile:</span> L'IA utilise
+                  l'algorithme MinMax basique
+                </div>
+                <div>
+                  <span class="nes-text is-error">Difficile:</span> L'IA utilise
+                  l'algorithme AlphaBeta plus avancé
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-center gap-4">
+            <div class="mb-4 w-1/2">
+              <div class="nes-container is-dark is-rounded w-full">
+                <div id="player-turn" class="nes-text">Votre tour</div>
+              </div>
+            </div>
+            <div class="mb-4 w-1/2">
+              <div class="nes-container is-dark is-rounded w-full">
+                <p>
+                  Le jeu se fera en
+                  <span id="game-generations">10</span> générations
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-center gap-4">
+            <div id="pb1" class="nes-container is-dark is-rounded w-1/2">
+              <span id="player1-name">Joueur</span>:
+              <span id="player1-blocks" class="nes-text">10</span>
+              pions restants
+            </div>
+            <div id="pb2" class="nes-container is-dark is-rounded w-1/2">
+              <span id="player2-name">Ordinateur</span>:
+              <span id="player2-blocks" class="nes-text">10</span>
+              pions restants
+            </div>
+          </div>
+
+          <div class="m-4">
+            <div
+              class="w-full nes-container is-dark is-rounded flex items-center justify-center flex-col"
+            >
+              <div class="flex justify-between w-full mb-2">
+                <h1>Grille de jeu :</h1>
+                <button id="save-game" class="nes-btn is-warning">
+                  Sauvegarder la partie
+                </button>
+              </div>
+              <button
+                id="start-generations"
+                class="nes-btn is-success mt-4 hidden"
+              >
+                Lancer la génération
+              </button>
+              <div
+                id="grid-container"
+                class="nes-container is-dark is-rounded"
+              ></div>
+            </div>
+          </div>
+
+          <div id="game-result" class="nes-container is-dark is-rounded hidden">
+            <div
+              class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+            >
+              <div class="nes-container is-dark is-rounded bg-white p-8">
+                <h2 id="winner-announcement" class="nes-text text-xl mb-4"></h2>
+                <div id="player-scores" class="nes-text space-y-2"></div>
+                <div class="flex justify-between mt-4">
+                  <button onclick="closeModal()" class="nes-btn">Fermer</button>
+                  <button id="save-finished-game" class="nes-btn is-warning">
+                    Sauvegarder cette partie
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- verifie s'il est connecté -->
+    <script>
+      const token = localStorage.getItem("token");
+      if (!token) {
+        window.location.href = "/login";
+      }
+      const username = localStorage.getItem("username");
+    </script>
+
+    <!-- Import du script pour les algorithmes d'IA -->
+    <script type="module" src="./src/ai-player.js"></script>
+
+    <!-- Import du script pour sauvegarder les parties -->
+    <script type="module" src="./src/services/savedGames.js"></script>
+
+    <!-- script conway -->
+    <script type="module">
+      import {
+        AIPlayer,
+        MinMaxStrategy,
+        AlphaBetaStrategy,
+      } from "./src/ai-player.js";
+      import {
+        saveGame,
+        addMoveToGame,
+        updateGame,
+      } from "./src/services/savedGames.js";
+
+      let currentUserId;
+      let currentGameId = null;
+      let isRecording = false;
+      let gameHistory = [];
+      let moveCounter = 0;
+      let winner = null;
+      let match_null = false;
+
+      class ConwayAI {
+        constructor(gridSize = 20) {
+          this.gridSize = gridSize;
+          this.jsonGame = {
+            player1: [], // Joueur humain
+            player2: [], // IA
+          };
+          this.currentPlayer = 1; // Le joueur humain commence
+          this.playerBlocks = { 1: 0, 2: 0 };
+          this.generation = 0;
+          this.gameFinished = false;
+          this.aiStrategy = new MinMaxStrategy(); // Stratégie par défaut
+
+          this.initializeGrid();
+          this.updateBlocksDisplay();
+          this.setupEventListeners();
+        }
+
+        setupEventListeners() {
+          // Écouteur pour le changement de difficulté
+          document
+            .getElementById("difficulty")
+            .addEventListener("change", (e) => {
+              if (e.target.value === "minmax") {
+                this.aiStrategy = new MinMaxStrategy();
+                console.log("Difficulté: MinMax (Facile)");
+              } else {
+                this.aiStrategy = new AlphaBetaStrategy();
+                console.log("Difficulté: AlphaBeta (Difficile)");
+              }
+            });
+
+          // Configuration du bouton pour lancer les générations
+          document
+            .getElementById("start-generations")
+            .addEventListener("click", () => {
+              this.runGenerations(10);
+            });
+
+          // Configurer le bouton de sauvegarde pendant une partie
+          document
+            .getElementById("save-game")
+            .addEventListener("click", () => this.startRecording());
+
+          // Configurer le bouton de sauvegarde à la fin d'une partie
+          document
+            .getElementById("save-finished-game")
+            .addEventListener("click", () => this.saveFinishedGame());
+        }
+
+        initializeGrid() {
+          const gridContainer = document.getElementById("grid-container");
+          gridContainer.style.display = "grid";
+          gridContainer.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
+          gridContainer.style.gap = "2px";
+          gridContainer.style.width = "800px";
+          gridContainer.style.height = "800px";
+          gridContainer.style.margin = "10px auto";
+          gridContainer.innerHTML = "";
+
+          for (let i = 0; i < this.gridSize; i++) {
+            for (let j = 0; j < this.gridSize; j++) {
+              const cell = document.createElement("div");
+              cell.classList.add("nes-btn");
+              cell.style.aspectRatio = "1/1";
+              cell.style.padding = "0";
+              cell.style.minWidth = "0";
+              cell.style.minHeight = "10px";
+              cell.dataset.row = i;
+              cell.dataset.col = j;
+              cell.addEventListener("click", () => this.toggleCell(i, j));
+              gridContainer.appendChild(cell);
+            }
+          }
+        }
+
+        toggleCell(row, col) {
+          // Vérifier si c'est le tour du joueur humain et si la partie n'est pas terminée
+          if (this.currentPlayer !== 1 || this.gameFinished) {
+            console.log("Ce n'est pas votre tour ou la partie est terminée");
+            return false;
+          }
+
+          // Vérifier si le joueur a utilisé tous ses pions
+          if (this.playerBlocks[this.currentPlayer] >= 10) {
+            console.log("Vous avez utilisé tous vos pions");
+            return false;
+          }
+
+          const cell = document.querySelector(
+            `.nes-btn[data-row="${row}"][data-col="${col}"]`
+          );
+
+          // Vérifier si la cellule est déjà occupée
+          if (
+            !cell.classList.contains("is-success") &&
+            !cell.classList.contains("is-error")
+          ) {
+            // Ajouter la classe du joueur humain (vert)
+            cell.classList.add("is-success");
+
+            const position = [row, col];
+            const playerKey = `player${this.currentPlayer}`;
+
+            if (
+              !this.jsonGame[playerKey].some(([r, c]) => r === row && c === col)
+            ) {
+              // Ajouter la position à l'état du jeu
+              this.jsonGame[playerKey].push(position);
+              this.playerBlocks[this.currentPlayer]++;
+              this.updateBlocksDisplay();
+
+              // Enregistrer le mouvement si l'enregistrement est actif
+              if (isRecording) {
+                const moveData = {
+                  turn: moveCounter++,
+                  player: this.currentPlayer,
+                  action: "place_cell",
+                  data: {
+                    row: row,
+                    col: col,
+                    player: this.currentPlayer,
+                  },
+                };
+
+                gameHistory.push(moveData);
+                if (currentGameId) {
+                  addMoveToGame(currentGameId, moveData).catch((error) => {
+                    console.error(
+                      "Erreur lors de l'enregistrement du mouvement:",
+                      error
+                    );
+                  });
+                }
+              }
+
+              // Passer au tour de l'IA
+              this.switchPlayer();
+
+              // Si les deux joueurs ont placé leurs 10 pions, montrer le bouton pour lancer les générations
+              if (this.playerBlocks[1] === 10 && this.playerBlocks[2] === 10) {
+                const startGenerationsBtn =
+                  document.getElementById("start-generations");
+                startGenerationsBtn.classList.remove("hidden");
+                startGenerationsBtn.style.display = "block";
+                document.getElementById("pb1").style.display = "none";
+                document.getElementById("pb2").style.display = "none";
+              } else {
+                // Sinon, faire jouer l'IA après un court délai
+                setTimeout(() => this.playAIMove(), 500);
+              }
+
+              return true;
+            }
+          }
+          return false;
+        }
+
+        playAIMove() {
+          if (this.currentPlayer !== 2 || this.playerBlocks[2] >= 10) {
+            return;
+          }
+
+          document.getElementById("player-turn").textContent =
+            "L'ordinateur réfléchit...";
+
+          // Utiliser une promesse pour simuler un délai de réflexion de l'IA
+          new Promise((resolve) => {
+            setTimeout(() => {
+              // Utiliser la stratégie AI sélectionnée pour obtenir le meilleur coup
+              const aiMove = this.aiStrategy.getBestMove(
+                this.jsonGame,
+                this.playerBlocks
+              );
+              resolve(aiMove);
+            }, 700); // Délai pour simuler la réflexion de l'IA
+          }).then(([row, col]) => {
+            // Appliquer le mouvement de l'IA
+            const cell = document.querySelector(
+              `.nes-btn[data-row="${row}"][data-col="${col}"]`
+            );
+
+            if (cell) {
+              cell.classList.add("is-error"); // Rouge pour l'IA
+
+              this.jsonGame.player2.push([row, col]);
+              this.playerBlocks[2]++;
+              this.updateBlocksDisplay();
+
+              // Enregistrer le mouvement de l'IA si l'enregistrement est actif
+              if (isRecording) {
+                const moveData = {
+                  turn: moveCounter++,
+                  player: 2,
+                  action: "place_cell",
+                  data: {
+                    row: row,
+                    col: col,
+                    player: 2,
+                  },
+                };
+
+                gameHistory.push(moveData);
+                if (currentGameId) {
+                  addMoveToGame(currentGameId, moveData).catch((error) => {
+                    console.error(
+                      "Erreur lors de l'enregistrement du mouvement de l'IA:",
+                      error
+                    );
+                  });
+                }
+              }
+
+              // Revenir au tour du joueur humain
+              this.switchPlayer();
+
+              // Si les deux joueurs ont placé leurs 10 pions, montrer le bouton pour lancer les générations
+              if (this.playerBlocks[1] === 10 && this.playerBlocks[2] === 10) {
+                const startGenerationsBtn =
+                  document.getElementById("start-generations");
+                startGenerationsBtn.classList.remove("hidden");
+                startGenerationsBtn.style.display = "block";
+                document.getElementById("pb1").style.display = "none";
+                document.getElementById("pb2").style.display = "none";
+              }
+            }
+          });
+        }
+
+        switchPlayer() {
+          this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
+          this.updateTurnDisplay();
+        }
+
+        updateTurnDisplay() {
+          const turnDisplay = document.getElementById("player-turn");
+          turnDisplay.style.color = "white";
+
+          if (this.currentPlayer === 1) {
+            turnDisplay.textContent = "Votre tour";
+          } else {
+            turnDisplay.textContent = "Tour de l'ordinateur";
+          }
+        }
+
+        updateBlocksDisplay() {
+          document.getElementById("player1-blocks").textContent =
+            10 - this.playerBlocks[1];
+          document.getElementById("player2-blocks").textContent =
+            10 - this.playerBlocks[2];
+        }
+
+        runGenerations(generations) {
+          this.generation = 1; // Marquer le début des générations
+
+          // Enregistrer le démarrage des générations si l'enregistrement est actif
+          if (isRecording) {
+            const moveData = {
+              turn: moveCounter++,
+              player: 0,
+              action: "start_generations",
+              data: {
+                generations: generations,
+              },
+            };
+
+            gameHistory.push(moveData);
+            if (currentGameId) {
+              addMoveToGame(currentGameId, moveData).catch((error) => {
+                console.error(
+                  "Erreur lors de l'enregistrement du démarrage des générations:",
+                  error
+                );
+              });
+            }
+          }
+
+          // Vérifier s'il y a des cellules vivantes
+          if (
+            this.jsonGame.player1.length === 0 &&
+            this.jsonGame.player2.length === 0
+          ) {
+            console.log(
+              "Pas de cellules vivantes pour commencer les générations"
+            );
+            return;
+          }
+
+          // Cacher le bouton de démarrage des générations
+          document.getElementById("start-generations").style.display = "none";
+
+          // Afficher un message indiquant que les générations sont en cours
+          document.getElementById("player-turn").textContent =
+            "Calcul des générations en cours...";
+
+          let currentGen = 0;
+          const generationInterval = setInterval(() => {
+            if (currentGen >= generations) {
+              clearInterval(generationInterval);
+              this.endGame();
+              return;
+            }
+
+            console.log(`Génération ${currentGen + 1}`);
+            this.calculateNextGeneration();
+            currentGen++;
+            document.getElementById(
+              "player-turn"
+            ).textContent = `Génération ${currentGen}/${generations}`;
+          }, 1000);
+        }
+
+        calculateNextGeneration() {
+          console.log("Début calculateNextGeneration");
+
+          // Enregistrer l'état avant le calcul si l'enregistrement est actif
+          let beforeState = null;
+          if (isRecording) {
+            beforeState = {
+              player1: [...this.jsonGame.player1],
+              player2: [...this.jsonGame.player2],
+            };
+          }
+
+          const newState = { player1: [], player2: [] };
+          const gridState = Array(this.gridSize)
+            .fill()
+            .map(() => Array(this.gridSize).fill(0));
+
+          // Nettoyer les données et filtrer les positions invalides
+          for (const player of ["player1", "player2"]) {
+            // S'assurer que jsonGame[player] est un tableau
+            if (!Array.isArray(this.jsonGame[player])) {
+              this.jsonGame[player] = [];
+              continue;
+            }
+
+            // Filtrer les positions invalides
+            this.jsonGame[player] = this.jsonGame[player].filter((position) => {
+              return (
+                Array.isArray(position) &&
+                position.length === 2 &&
+                Number.isInteger(position[0]) &&
+                Number.isInteger(position[1]) &&
+                position[0] >= 0 &&
+                position[0] < this.gridSize &&
+                position[1] >= 0 &&
+                position[1] < this.gridSize
+              );
+            });
+          }
+
+          // Marquer les cellules existantes dans la grille
+          ["player1", "player2"].forEach((player, index) => {
+            this.jsonGame[player].forEach(([row, col]) => {
+              if (
+                row !== null &&
+                col !== null &&
+                row >= 0 &&
+                row < this.gridSize &&
+                col >= 0 &&
+                col < this.gridSize
+              ) {
+                gridState[row][col] = index + 1;
+              }
+            });
+          });
+
+          // Calculer la prochaine génération selon les règles du jeu de la vie de Conway
+          for (let row = 0; row < this.gridSize; row++) {
+            for (let col = 0; col < this.gridSize; col++) {
+              const currentPlayer = gridState[row][col];
+              const neighbors = this.countLiveNeighborsFromGrid(
+                gridState,
+                row,
+                col
+              );
+
+              if (currentPlayer !== 0) {
+                // Règle de survie
+                if (neighbors === 2 || neighbors === 3) {
+                  newState[`player${currentPlayer}`].push([row, col]);
+                }
+              } else if (neighbors === 3) {
+                // Règle de naissance
+                const dominantPlayer = this.getDominantPlayerFromGrid(
+                  gridState,
+                  row,
+                  col
+                );
+                newState[`player${dominantPlayer}`].push([row, col]);
+              }
+            }
+          }
+
+          // Mettre à jour l'état du jeu
+          this.jsonGame = newState;
+
+          // Mettre à jour l'affichage de la grille
+          this.syncGridWithJSON();
+
+          // Enregistrer la génération si l'enregistrement est actif
+          if (isRecording && beforeState) {
+            const afterState = {
+              player1: [...this.jsonGame.player1],
+              player2: [...this.jsonGame.player2],
+            };
+
+            const moveData = {
+              turn: moveCounter++,
+              player: 0,
+              action: "generation",
+              data: {
+                before: beforeState,
+                after: afterState,
+              },
+            };
+
+            gameHistory.push(moveData);
+            if (currentGameId) {
+              addMoveToGame(currentGameId, moveData).catch((error) => {
+                console.error(
+                  "Erreur lors de l'enregistrement de la génération:",
+                  error
+                );
+              });
+            }
+          }
+        }
+
+        countLiveNeighborsFromGrid(grid, row, col) {
+          let count = 0;
+          for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+              if (i === 0 && j === 0) continue;
+
+              const newRow = row + i;
+              const newCol = col + j;
+
+              if (
+                newRow >= 0 &&
+                newRow < this.gridSize &&
+                newCol >= 0 &&
+                newCol < this.gridSize
+              ) {
+                if (grid[newRow][newCol] !== 0) {
+                  count++;
+                }
+              }
+            }
+          }
+          return count;
+        }
+
+        getDominantPlayerFromGrid(grid, row, col) {
+          const counts = { 1: 0, 2: 0 };
+
+          for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+              if (i === 0 && j === 0) continue;
+
+              const newRow = row + i;
+              const newCol = col + j;
+
+              if (
+                newRow >= 0 &&
+                newRow < this.gridSize &&
+                newCol >= 0 &&
+                newCol < this.gridSize
+              ) {
+                const player = grid[newRow][newCol];
+                if (player !== 0) {
+                  counts[player]++;
+                }
+              }
+            }
+          }
+
+          return counts[2] > counts[1] ? 2 : 1;
+        }
+
+        syncGridWithJSON() {
+          // Réinitialiser toutes les cellules
+          document.querySelectorAll(".nes-btn").forEach((cell) => {
+            cell.classList.remove("is-success", "is-error");
+          });
+
+          // Mettre à jour l'affichage avec les positions actuelles
+          if (Array.isArray(this.jsonGame.player1)) {
+            this.jsonGame.player1.forEach(([row, col]) => {
+              const cell = document.querySelector(
+                `.nes-btn[data-row="${row}"][data-col="${col}"]`
+              );
+              if (cell) {
+                cell.classList.add("is-success");
+              }
+            });
+          }
+
+          if (Array.isArray(this.jsonGame.player2)) {
+            this.jsonGame.player2.forEach(([row, col]) => {
+              const cell = document.querySelector(
+                `.nes-btn[data-row="${row}"][data-col="${col}"]`
+              );
+              if (cell) {
+                cell.classList.add("is-error");
+              }
+            });
+          }
+        }
+
+        endGame() {
+          this.gameFinished = true;
+          const player1Cells = this.jsonGame.player1.length;
+          const player2Cells = this.jsonGame.player2.length;
+
+          // Déterminer le vainqueur
+          const winnerAnnouncement = document.getElementById(
+            "winner-announcement"
+          );
+          const playerScores = document.getElementById("player-scores");
+          const gameResult = document.getElementById("game-result");
+
+          if (player1Cells > player2Cells) {
+            winner = username;
+            winnerAnnouncement.textContent = "Vous avez gagné !";
+            winnerAnnouncement.style.color = "#92cc41"; // Vert
+          } else if (player2Cells > player1Cells) {
+            winner = "Ordinateur";
+            winnerAnnouncement.textContent = "L'ordinateur a gagné !";
+            winnerAnnouncement.style.color = "#e76e55"; // Rouge
+          } else {
+            match_null = true;
+            winnerAnnouncement.textContent = "Match nul !";
+            winnerAnnouncement.style.color = "#f8f8ff"; // Blanc
+          }
+
+          // Afficher les scores
+          playerScores.innerHTML = `
+            <div>Joueur: ${player1Cells} cellules</div>
+            <div>Ordinateur: ${player2Cells} cellules</div>
+          `;
+
+          // Afficher le modal de fin de partie
+          gameResult.classList.remove("hidden");
+
+          // Mettre à jour le message dans l'interface
+          document.getElementById("player-turn").textContent =
+            "Partie terminée";
+        }
+
+        async startRecording() {
+          if (isRecording) {
+            alert("L'enregistrement de cette partie est déjà en cours!");
+            return;
+          }
+
+          try {
+            // Récupérer l'ID de l'utilisateur actuel
+            const response = await fetch("http://localhost:8090/users/me/", {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+            });
+
+            if (!response.ok) {
+              throw new Error(
+                "Erreur lors de la récupération des informations utilisateur"
+              );
+            }
+
+            const userData = await response.json();
+            currentUserId = userData.id;
+
+            // Recherche d'un joueur IA dans la base de données ou en créer un s'il n'existe pas
+            let aiUser;
+            const usersResponse = await fetch(`http://localhost:8090/users/`, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+            });
+
+            if (!usersResponse.ok) {
+              throw new Error(
+                "Erreur lors de la récupération des utilisateurs"
+              );
+            }
+
+            const allUsers = await usersResponse.json();
+            aiUser = allUsers.find((user) => user.username === "AI_Player");
+
+            if (!aiUser) {
+              // Créer un utilisateur IA si nécessaire (ce code est pour l'exemple, en production il faudrait gérer cette création différemment)
+              console.log(
+                "Impossible de trouver l'utilisateur IA, utilisation d'un ID fictif"
+              );
+              aiUser = { id: currentUserId }; // Fallback pour les tests
+            }
+
+            // État initial du jeu
+            const initialState = {
+              player1: [...this.jsonGame.player1],
+              player2: [...this.jsonGame.player2],
+            };
+
+            // Création des données de la partie
+            const gameData = {
+              player1_id: currentUserId,
+              player2_id: aiUser.id,
+              game_history: [],
+              final_state: null,
+              is_finished: false,
+            };
+
+            // Sauvegarder la partie et obtenir l'ID
+            const savedGame = await saveGame(gameData);
+            currentGameId = savedGame.id;
+
+            // Ajouter l'état initial comme premier mouvement
+            await addMoveToGame(currentGameId, {
+              turn: moveCounter++,
+              player: 0, // 0 indique l'état initial
+              action: "initial_state",
+              data: initialState,
+            });
+
+            // Activer l'enregistrement
+            isRecording = true;
+            document.getElementById("save-game").textContent =
+              "Enregistrement en cours...";
+            document.getElementById("save-game").classList.remove("is-warning");
+            document.getElementById("save-game").classList.add("is-error");
+
+            alert("L'enregistrement de la partie a commencé!");
+          } catch (error) {
+            console.error(
+              "Erreur lors du démarrage de l'enregistrement:",
+              error
+            );
+            alert("Erreur lors du démarrage de l'enregistrement");
+          }
+        }
+
+        async saveFinishedGame() {
+          try {
+            if (!currentUserId) {
+              // Récupérer l'ID de l'utilisateur si nécessaire
+              const response = await fetch("http://localhost:8090/users/me/", {
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+              });
+
+              if (!response.ok) {
+                throw new Error(
+                  "Erreur lors de la récupération des informations utilisateur"
+                );
+              }
+
+              const userData = await response.json();
+              currentUserId = userData.id;
+            }
+
+            // Recherche d'un joueur IA dans la base de données
+            let aiUser;
+            const usersResponse = await fetch(`http://localhost:8090/users/`, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+            });
+
+            if (!usersResponse.ok) {
+              throw new Error(
+                "Erreur lors de la récupération des utilisateurs"
+              );
+            }
+
+            const allUsers = await usersResponse.json();
+            aiUser = allUsers.find((user) => user.username === "AI_Player");
+
+            if (!aiUser) {
+              // Utiliser un ID par défaut si l'utilisateur IA n'existe pas
+              aiUser = { id: currentUserId }; // Fallback pour les tests
+            }
+
+            // Si un enregistrement est déjà en cours, mettre à jour cette partie
+            if (isRecording && currentGameId) {
+              await updateGame(currentGameId, {
+                game_history: gameHistory,
+                final_state: this.jsonGame,
+                winner_id:
+                  winner === username
+                    ? currentUserId
+                    : winner === "Ordinateur"
+                    ? aiUser.id
+                    : null,
+                is_finished: true,
+              });
+
+              alert("La partie enregistrée a été complétée et sauvegardée!");
+              closeModal();
+              return;
+            }
+
+            // Sinon, créer une nouvelle partie avec son historique
+            // État initial du jeu
+            const initialState = {
+              player1: [],
+              player2: [],
+            };
+
+            // Ajouter l'état initial comme premier mouvement
+            gameHistory = [
+              {
+                turn: 0,
+                player: 0, // 0 indique l'état initial
+                action: "initial_state",
+                data: initialState,
+              },
+            ];
+
+            // Création des données de la partie
+            const gameData = {
+              player1_id: currentUserId,
+              player2_id: aiUser.id,
+              game_history: gameHistory,
+              final_state: this.jsonGame,
+              is_finished: true,
+              winner_id:
+                winner === username
+                  ? currentUserId
+                  : winner === "Ordinateur"
+                  ? aiUser.id
+                  : null,
+            };
+
+            await saveGame(gameData);
+            alert("Partie sauvegardée avec succès !");
+
+            // Fermer le modal
+            closeModal();
+          } catch (error) {
+            console.error("Erreur lors de la sauvegarde de la partie:", error);
+            alert("Erreur lors de la sauvegarde de la partie");
+          }
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        // Initialiser le jeu
+        window.game = new ConwayAI();
+
+        // Configurer la fermeture du modal de résultat
+        window.closeModal = function () {
+          document.getElementById("game-result").classList.add("hidden");
+          // Optionnel : rediriger vers la page d'accueil après la fermeture
+          // window.location.href = "/";
+        };
+      });
+    </script>
+  </body>
+</html>
