@@ -3,12 +3,12 @@
 # datetime est utilisé pour la gestion des dates
 from datetime import datetime
 # typing.Annotated est utilisé pour la gestion des annotations
-from typing import Annotated
+from typing import Annotated, List
 
 import schemas
 import services
 import websocket
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 # CORS est utilisé pour la gestion des requêtes CORS
 from fastapi.middleware.cors import CORSMiddleware
 # OAuth2PasswordBearer est utilisé pour la gestion de l'authentification, OAuth2PasswordRequestForm est utilisé pour la gestion de la requête d'authentification
@@ -28,6 +28,10 @@ tags_metadata = [
         "name": "Users",
         "description": "Operations with users. The **login** logic is also here.",
     },
+    {
+        "name": "Games",
+        "description": "Operations with games. Save, update and view games.",
+    },
 ]
 
 # --- FastAPI app
@@ -43,11 +47,10 @@ services.create_database()
 services.get_db()
 
 # --- Configuration CORS
-# il est possible de passer un tableau avec les origines autorisées, les méthodes autorisées, les en-têtes autorisés, etc.
-# ici, on autorise toutes les origines, les méthodes, les en-têtes, etc car on est en développement, en production, il faudra restreindre ces valeurs
+# Spécifier explicitement les origines autorisées pour résoudre les problèmes CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173"],  # Origine du frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -158,3 +161,145 @@ async def websocket_game_endpoint(websocket: WebSocket):
             await game_manager.handle_message(websocket, data)
     except WebSocketDisconnect:
         await game_manager.remove_player(websocket)
+
+# --- Games
+@app.post("/games/", response_model=schemas.Game, tags=["Games"])
+async def create_game(
+    game: schemas.GameCreate,
+    current_user: Annotated[schemas.User, Depends(services.get_current_user)],
+    db: Session = Depends(services.get_db)
+) -> schemas.Game:
+    """
+    Cette route permet de créer une nouvelle partie
+    @param game: schemas.GameCreate
+    @param current_user: schemas.User
+    @param db: Session
+    @return schemas.Game
+    """
+    return await services.save_game(db, game)
+
+@app.post("/games/{game_id}/moves", response_model=schemas.Game, tags=["Games"])
+async def add_move_to_game(
+    game_id: int,
+    move: schemas.GameAddMove,
+    current_user: Annotated[schemas.User, Depends(services.get_current_user)],
+    db: Session = Depends(services.get_db)
+) -> schemas.Game:
+    """
+    Cette route permet d'ajouter un mouvement à l'historique d'une partie
+    @param game_id: int
+    @param move: schemas.GameAddMove
+    @param current_user: schemas.User
+    @param db: Session
+    @return schemas.Game
+    """
+    game = await services.get_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partie non trouvée")
+    
+    # Vérifier que l'utilisateur est l'un des joueurs
+    if current_user.id != game.player1_id and current_user.id != game.player2_id:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas autorisé à modifier cette partie")
+    
+    return await services.add_move_to_game(db, game_id, move)
+
+@app.get("/games/", response_model=List[schemas.Game], tags=["Games"])
+async def read_games(
+    current_user: Annotated[schemas.User, Depends(services.get_current_user)],
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(services.get_db)
+) -> List[schemas.Game]:
+    """
+    Cette route permet de récupérer toutes les parties
+    @param current_user: schemas.User
+    @param skip: int
+    @param limit: int
+    @param db: Session
+    @return List[schemas.Game]
+    """
+    return await services.get_all_games(db, skip, limit)
+
+@app.get("/games/{game_id}", response_model=schemas.Game, tags=["Games"])
+async def read_game(
+    game_id: int,
+    current_user: Annotated[schemas.User, Depends(services.get_current_user)],
+    db: Session = Depends(services.get_db)
+) -> schemas.Game:
+    """
+    Cette route permet de récupérer une partie par son ID
+    @param game_id: int
+    @param current_user: schemas.User
+    @param db: Session
+    @return schemas.Game
+    """
+    game = await services.get_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partie non trouvée")
+    return game
+
+@app.get("/games/user/{user_id}", response_model=List[schemas.Game], tags=["Games"])
+async def read_user_games(
+    user_id: int,
+    current_user: Annotated[schemas.User, Depends(services.get_current_user)],
+    db: Session = Depends(services.get_db)
+) -> List[schemas.Game]:
+    """
+    Cette route permet de récupérer toutes les parties d'un utilisateur
+    @param user_id: int
+    @param current_user: schemas.User
+    @param db: Session
+    @return List[schemas.Game]
+    """
+    return await services.get_user_games(db, user_id)
+
+@app.put("/games/{game_id}", response_model=schemas.Game, tags=["Games"])
+async def update_game_route(
+    game_id: int,
+    game_update: schemas.GameUpdate,
+    current_user: Annotated[schemas.User, Depends(services.get_current_user)],
+    db: Session = Depends(services.get_db)
+) -> schemas.Game:
+    """
+    Cette route permet de mettre à jour une partie
+    @param game_id: int
+    @param game_update: schemas.GameUpdate
+    @param current_user: schemas.User
+    @param db: Session
+    @return schemas.Game
+    """
+    game = await services.get_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partie non trouvée")
+    
+    # Vérifier que l'utilisateur est l'un des joueurs
+    if current_user.id != game.player1_id and current_user.id != game.player2_id:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas autorisé à modifier cette partie")
+        
+    return await services.update_game(db, game_id, game_update)
+
+@app.delete("/games/{game_id}", tags=["Games"])
+async def delete_game_route(
+    game_id: int,
+    current_user: Annotated[schemas.User, Depends(services.get_current_user)],
+    db: Session = Depends(services.get_db)
+):
+    """
+    Cette route permet de supprimer une partie
+    @param game_id: int
+    @param current_user: schemas.User
+    @param db: Session
+    @return: Message de confirmation
+    """
+    game = await services.get_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partie non trouvée")
+    
+    # Vérifier que l'utilisateur est l'un des joueurs
+    if current_user.id != game.player1_id and current_user.id != game.player2_id:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas autorisé à supprimer cette partie")
+    
+    success = await services.delete_game(db, game_id)
+    if success:
+        return {"message": "Partie supprimée avec succès"}
+    raise HTTPException(status_code=500, detail="Erreur lors de la suppression de la partie")

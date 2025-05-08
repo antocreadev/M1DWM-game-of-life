@@ -2,7 +2,7 @@
 # sqlalchemy.orm est utilisé pour la session de la base de données, cela permet d'accéder à la base de données, de la lire et de l'écrire, etc.
 import random
 # typing.Annotated est utilisé pour les annotations
-from typing import Annotated
+from typing import Annotated, List, Optional
 
 import database
 import models
@@ -125,3 +125,109 @@ async def update_elo(db: Session, user_add: str, user_remove: str):
     db.query(models.User).filter(models.User.username == user_remove).update({"elo": models.User.elo - 100})
     db.commit()
     return {"message": "Elo updated successfully"}
+
+# --- Games
+async def save_game(db: Session, game: schemas.GameCreate) -> models.Game:
+    """
+    Cette fonction permet d'enregistrer une partie
+    @param db: Session
+    @param game: schemas.GameCreate
+    @return models.Game
+    """
+    db_game = models.Game(**game.dict())
+    db.add(db_game)
+    db.commit()
+    db.refresh(db_game)
+    return db_game
+
+async def update_game(db: Session, game_id: int, game_update: schemas.GameUpdate) -> models.Game:
+    """
+    Cette fonction permet de mettre à jour une partie
+    @param db: Session
+    @param game_id: int
+    @param game_update: schemas.GameUpdate
+    @return models.Game
+    """
+    db_game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Partie non trouvée")
+    
+    for key, value in game_update.dict().items():
+        setattr(db_game, key, value)
+    
+    db.commit()
+    db.refresh(db_game)
+    return db_game
+
+async def add_move_to_game(db: Session, game_id: int, move_data: schemas.GameAddMove) -> models.Game:
+    """
+    Cette fonction permet d'ajouter un mouvement à l'historique d'une partie
+    @param db: Session
+    @param game_id: int
+    @param move_data: schemas.GameAddMove
+    @return models.Game
+    """
+    db_game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Partie non trouvée")
+    
+    # Initialiser l'historique s'il est None
+    if db_game.game_history is None:
+        db_game.game_history = []
+    
+    # Ajouter le mouvement à l'historique
+    db_game.game_history.append(move_data.move)
+    
+    db.commit()
+    db.refresh(db_game)
+    return db_game
+
+async def get_game(db: Session, game_id: int) -> Optional[models.Game]:
+    """
+    Cette fonction permet de récupérer une partie par son ID
+    @param db: Session
+    @param game_id: int
+    @return Optional[models.Game]
+    """
+    return db.query(models.Game).filter(models.Game.id == game_id).first()
+
+async def get_user_games(db: Session, user_id: int) -> List[models.Game]:
+    """
+    Cette fonction permet de récupérer toutes les parties d'un utilisateur
+    @param db: Session
+    @param user_id: int
+    @return List[models.Game]
+    """
+    return db.query(models.Game).filter(
+        (models.Game.player1_id == user_id) | (models.Game.player2_id == user_id)
+    ).all()
+
+async def get_all_games(db: Session, skip: int = 0, limit: int = 100) -> List[models.Game]:
+    """
+    Cette fonction permet de récupérer toutes les parties
+    @param db: Session
+    @param skip: int
+    @param limit: int
+    @return List[models.Game]
+    """
+    return db.query(models.Game).offset(skip).limit(limit).all()
+
+async def delete_game(db: Session, game_id: int) -> bool:
+    """
+    Supprime une partie par son ID
+    @param db: Session
+    @param game_id: int
+    @return bool: True si la suppression a réussi, False sinon
+    """
+    try:
+        game = db.query(models.Game).filter(models.Game.id == game_id).first()
+        if not game:
+            return False
+            
+        db.delete(game)
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Erreur lors de la suppression de la partie: {e}")
+        return False

@@ -53,7 +53,12 @@
             <div
               class="w-full nes-container is-dark is-rounded flex items-center justify-center flex-col"
             >
-              <h1>Grille de jeu :</h1>
+              <div class="flex justify-between w-full mb-2">
+                <h1>Grille de jeu :</h1>
+                <button id="save-game" class="nes-btn is-warning">
+                  Sauvegarder la partie
+                </button>
+              </div>
               <button
                 id="start-generations"
                 class="nes-btn is-success mt-4 hidden"
@@ -99,9 +104,14 @@
               <div class="nes-container is-dark is-rounded bg-white p-8">
                 <h2 id="winner-announcement" class="nes-text text-xl mb-4"></h2>
                 <div id="player-scores" class="nes-text space-y-2"></div>
-                <button onclick="closeModal()" class="nes-btn mt-4">
-                  Fermer
-                </button>
+                <div class="flex justify-between mt-4">
+                  <button onclick="closeModal()" class="nes-btn">
+                    Fermer
+                  </button>
+                  <button id="save-finished-game" class="nes-btn is-warning">
+                    Sauvegarder cette partie
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -115,7 +125,7 @@
     <script>
       const token = localStorage.getItem("token");
       if (!token) {
-        // window.location.href = "/login";
+        window.location.href = "/login";
       }
       const username = localStorage.getItem("username");
     </script>
@@ -359,18 +369,23 @@
             const playerClass = playerNumber === 1 ? "is-success" : "is-error";
 
             // Ne mettre à jour les compteurs de blocs que si nous ne sommes pas en mode génération
-            if (this.generation === 0) {
+            if (this.generation === 0 && Array.isArray(positions)) {
               this.playerBlocks[playerNumber] = positions.length;
             }
 
-            positions.forEach(([row, col]) => {
-              const cell = document.querySelector(
-                `.nes-btn[data-row="${row}"][data-col="${col}"]`
-              );
-              if (cell) {
-                cell.classList.add(playerClass);
-              }
-            });
+            // Vérifier si positions est un tableau avant d'appeler forEach
+            if (Array.isArray(positions)) {
+              positions.forEach(([row, col]) => {
+                const cell = document.querySelector(
+                  `.nes-btn[data-row="${row}"][data-col="${col}"]`
+                );
+                if (cell) {
+                  cell.classList.add(playerClass);
+                }
+              });
+            } else {
+              console.warn(`Les positions pour ${player} ne sont pas un tableau:`, positions);
+            }
           }
 
           // Ne mettre à jour l'affichage des blocs que si nous ne sommes pas en mode génération
@@ -464,14 +479,35 @@
             .fill()
             .map(() => Array(this.gridSize).fill(0));
 
+          // Nettoyer les données et filtrer les positions invalides
+          for (const player of ["player1", "player2"]) {
+            // S'assurer que jsonGame[player] est un tableau
+            if (!Array.isArray(this.jsonGame[player])) {
+              this.jsonGame[player] = [];
+              continue;
+            }
+            
+            // Filtrer les positions invalides (null, undefined, etc.)
+            this.jsonGame[player] = this.jsonGame[player].filter(position => {
+              return Array.isArray(position) && 
+                     position.length === 2 && 
+                     Number.isInteger(position[0]) && 
+                     Number.isInteger(position[1]) &&
+                     position[0] >= 0 && 
+                     position[0] < this.gridSize && 
+                     position[1] >= 0 && 
+                     position[1] < this.gridSize;
+            });
+          }
+
           // Marquer les cellules existantes dans la grille
           ["player1", "player2"].forEach((player, index) => {
             this.jsonGame[player].forEach(([row, col]) => {
+              // Vérification supplémentaire de sécurité
               if (
-                row >= 0 &&
-                row < this.gridSize &&
-                col >= 0 &&
-                col < this.gridSize
+                row !== null && col !== null &&
+                row >= 0 && row < this.gridSize &&
+                col >= 0 && col < this.gridSize
               ) {
                 gridState[row][col] = index + 1;
               }
@@ -630,6 +666,346 @@
         }
         ws.send("finish_game");
       }
+    </script>
+
+    <!-- Import du script pour sauvegarder les parties -->
+    <script type="module" src="./src/services/savedGames.js"></script>
+    
+    <!-- Script pour gérer la sauvegarde de partie -->
+    <script type="module">
+      import { saveGame, addMoveToGame, updateGame } from './src/services/savedGames.js';
+      
+      // Variables globales pour la gestion de l'enregistrement
+      let currentUserId;
+      let currentGameId = null;
+      let isRecording = false;
+      let gameHistory = [];
+      let moveCounter = 0;
+
+      // Attendre que la connexion WebSocket soit établie
+      document.addEventListener('DOMContentLoaded', () => {
+        // Attendre d'avoir les informations de l'utilisateur
+        fetch("http://localhost:8090/users/me/", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        })
+        .then(response => response.json())
+        .then(userData => {
+          currentUserId = userData.id;
+          
+          // Configurer le bouton de sauvegarde pendant une partie
+          document.getElementById('save-game').addEventListener('click', startRecording);
+          
+          // Configurer le bouton de sauvegarde à la fin d'une partie
+          document.getElementById('save-finished-game').addEventListener('click', saveFinishedGame);
+        })
+        .catch(error => {
+          console.error("Erreur lors de la récupération des informations de l'utilisateur:", error);
+        });
+      });
+
+      // Fonction pour démarrer l'enregistrement de la partie
+      async function startRecording() {
+        if (isRecording) {
+          alert('L\'enregistrement de cette partie est déjà en cours!');
+          return;
+        }
+        
+        if (!game || !playerUsernames) {
+          console.error("Aucune partie en cours");
+          return;
+        }
+        
+        try {
+          // Recherche de l'ID du joueur 2
+          const player2Response = await fetch(`http://localhost:8090/users/`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          
+          if (!player2Response.ok) {
+            throw new Error("Erreur lors de la récupération des utilisateurs");
+          }
+          
+          const allUsers = await player2Response.json();
+          const player2User = allUsers.find(user => user.username === playerUsernames.player2);
+          
+          if (!player2User) {
+            throw new Error("Impossible de trouver l'ID du joueur 2");
+          }
+          
+          // État initial du jeu
+          const initialState = {
+            player1: [...game.jsonGame.player1],
+            player2: [...game.jsonGame.player2]
+          };
+          
+          // Création des données de la partie
+          const gameData = {
+            player1_id: currentUserId,
+            player2_id: player2User.id,
+            game_history: [],
+            final_state: null,
+            is_finished: false
+          };
+          
+          // Sauvegarder la partie et obtenir l'ID
+          const savedGame = await saveGame(gameData);
+          currentGameId = savedGame.id;
+          
+          // Ajouter l'état initial comme premier mouvement
+          await addMoveToGame(currentGameId, {
+            turn: moveCounter++,
+            player: 0, // 0 indique l'état initial
+            action: 'initial_state',
+            data: initialState
+          });
+          
+          // Activer l'enregistrement
+          isRecording = true;
+          document.getElementById('save-game').textContent = 'Enregistrement en cours...';
+          document.getElementById('save-game').classList.remove('is-warning');
+          document.getElementById('save-game').classList.add('is-error');
+          
+          // Intercepter les mouvements futurs
+          setupMoveInterception();
+          
+          alert("L'enregistrement de la partie a commencé!");
+        } catch (error) {
+          console.error("Erreur lors du démarrage de l'enregistrement:", error);
+          alert("Erreur lors du démarrage de l'enregistrement");
+        }
+      }
+      
+      // Fonction qui intercepte les mouvements pour les enregistrer
+      function setupMoveInterception() {
+        // Garder une référence à la méthode originale
+        const originalToggleCell = game.toggleCell;
+        
+        // Remplacer par une version qui enregistre le mouvement
+        game.toggleCell = function(row, col) {
+          // Appeler la méthode originale
+          const result = originalToggleCell.call(this, row, col);
+          
+          // Si l'enregistrement est actif et un mouvement a été effectué
+          if (isRecording && result !== false) {
+            const moveData = {
+              turn: moveCounter++,
+              player: this.currentPlayer,
+              action: 'place_cell',
+              data: {
+                row: row,
+                col: col,
+                player: this.currentPlayer
+              }
+            };
+            
+            // Ajouter à l'historique local et envoyer au serveur
+            gameHistory.push(moveData);
+            addMoveToGame(currentGameId, moveData).catch(error => {
+              console.error("Erreur lors de l'enregistrement du mouvement:", error);
+            });
+          }
+          
+          return result;
+        };
+        
+        // Intercepter aussi les générations
+        const originalRunGenerations = game.runGenerations;
+        game.runGenerations = function(generations) {
+          if (isRecording) {
+            addMoveToGame(currentGameId, {
+              turn: moveCounter++,
+              player: 0,
+              action: 'start_generations',
+              data: {
+                generations: generations
+              }
+            }).catch(error => {
+              console.error("Erreur lors de l'enregistrement du démarrage des générations:", error);
+            });
+          }
+          
+          return originalRunGenerations.call(this, generations);
+        };
+        
+        // Intercepter aussi le calcul de chaque génération
+        const originalCalculateNextGeneration = game.calculateNextGeneration;
+        game.calculateNextGeneration = function() {
+          // Enregistrer l'état avant le calcul si on est en train d'enregistrer
+          if (isRecording) {
+            const beforeState = {
+              player1: [...this.jsonGame.player1],
+              player2: [...this.jsonGame.player2]
+            };
+            
+            // Appeler la méthode originale
+            originalCalculateNextGeneration.call(this);
+            
+            // Enregistrer l'état après le calcul
+            const afterState = {
+              player1: [...this.jsonGame.player1],
+              player2: [...this.jsonGame.player2]
+            };
+            
+            // Ajouter à l'historique
+            const moveData = {
+              turn: moveCounter++,
+              player: 0,
+              action: 'generation',
+              data: {
+                before: beforeState,
+                after: afterState
+              }
+            };
+            
+            gameHistory.push(moveData);
+            addMoveToGame(currentGameId, moveData).catch(error => {
+              console.error("Erreur lors de l'enregistrement de la génération:", error);
+            });
+          } else {
+            originalCalculateNextGeneration.call(this);
+          }
+        };
+      }
+      
+      // Fonction pour sauvegarder une partie terminée
+      async function saveFinishedGame() {
+        try {
+          // Si un enregistrement est déjà en cours, mettre à jour cette partie
+          if (isRecording && currentGameId) {
+            await updateGame(currentGameId, {
+              game_history: gameHistory,
+              final_state: game.jsonGame,
+              winner_id: await getWinnerUserId(),
+              is_finished: true
+            });
+            
+            alert("La partie enregistrée a été complétée et sauvegardée!");
+            closeModal();
+            return;
+          }
+          
+          // Sinon, créer une nouvelle partie
+          // Recherche des IDs des joueurs
+          const usersResponse = await fetch(`http://localhost:8090/users/`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          
+          if (!usersResponse.ok) {
+            throw new Error("Erreur lors de la récupération des utilisateurs");
+          }
+          
+          const allUsers = await usersResponse.json();
+          const player2User = allUsers.find(user => user.username === playerUsernames.player2);
+          const winnerUser = winner ? allUsers.find(user => user.username === winner) : null;
+          
+          if (!player2User) {
+            throw new Error("Impossible de trouver l'ID du joueur 2");
+          }
+          
+          // Création des données de la partie
+          const gameData = {
+            player1_id: currentUserId,
+            player2_id: player2User.id,
+            game_history: gameHistory,
+            final_state: game.jsonGame,
+            is_finished: true,
+            winner_id: winnerUser?.id || null
+          };
+          
+          const savedGame = await saveGame(gameData);
+          alert("Partie sauvegardée avec succès !");
+          
+          // Fermer le modal après sauvegarde
+          closeModal();
+        } catch (error) {
+          console.error("Erreur lors de la sauvegarde de la partie:", error);
+          alert("Erreur lors de la sauvegarde de la partie");
+        }
+      }
+      
+      // Fonction pour obtenir l'ID de l'utilisateur gagnant
+      async function getWinnerUserId() {
+        if (!winner) return null;
+        
+        try {
+          const usersResponse = await fetch(`http://localhost:8090/users/`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          
+          if (!usersResponse.ok) {
+            throw new Error("Erreur lors de la récupération des utilisateurs");
+          }
+          
+          const allUsers = await usersResponse.json();
+          const winnerUser = allUsers.find(user => user.username === winner);
+          
+          return winnerUser?.id || null;
+        } catch (error) {
+          console.error("Erreur lors de la récupération de l'ID du gagnant:", error);
+          return null;
+        }
+      }
+      
+      // Ajouter au prototype de Conway une méthode pour vérifier si un mouvement est valide
+      Conway.prototype.toggleCell = function(row, col) {
+        if (this.currentPlayer !== myPlayerNumber) {
+          document.getElementById("player-turn").textContent = "Ce n'est pas votre tour";
+          document.getElementById("player-turn").style.color = "red";
+          console.log("Ce n'est pas votre tour");
+          return false;
+        }
+
+        if (this.playerBlocks[this.currentPlayer] >= 10) {
+          console.log("Vous avez utilisé tous vos pions");
+          return false;
+        }
+
+        const cell = document.querySelector(
+          `.nes-btn[data-row="${row}"][data-col="${col}"]`
+        );
+
+        if (
+          !cell.classList.contains("is-success") &&
+          !cell.classList.contains("is-error")
+        ) {
+          // cell.classList.remove("is-primary");
+          cell.classList.add(
+            this.currentPlayer === 1 ? "is-success" : "is-error"
+          );
+
+          const position = [row, col];
+          const playerKey = `player${this.currentPlayer}`;
+
+          if (
+            !this.jsonGame[playerKey].some(([r, c]) => r === row && c === col)
+          ) {
+            this.jsonGame[playerKey].push(position);
+            this.playerBlocks[this.currentPlayer]++;
+            this.updateBlocksDisplay();
+
+            const updateData = {
+              type: "move",
+              game_data: this.jsonGame,
+              current_player: this.currentPlayer,
+            };
+            ws.send(JSON.stringify(updateData));
+            return true;
+          }
+        }
+        return false;
+      };
+      
+      // Exposer globalement pour permettre au code existant d'accéder
+      window.startRecording = startRecording;
+      window.saveFinishedGame = saveFinishedGame;
     </script>
   </body>
 </html>

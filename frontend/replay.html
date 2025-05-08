@@ -1,0 +1,132 @@
+<!-- filepath: /Users/antocreadev/Developer/M1DWM-game-of-life/frontend/replay.html -->
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./node_modules/nes.css/css/nes.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css?family=Press+Start+2P"
+      rel="stylesheet"
+    />
+    <title>Visualisation de Replay</title>
+    <style>
+      .control-btn {
+        min-width: 80px;
+      }
+      .slider-container {
+        display: flex;
+        align-items: center;
+        width: 100%;
+      }
+      input[type="range"] {
+        width: 100%;
+        margin: 0 12px;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-white">
+    <main class="min-h-screen p-8">
+      <div class="max-w-7xl mx-auto">
+        <!-- Header avec les infos de la partie -->
+        <section class="mb-8">
+          <div class="nes-container is-dark">
+            <h1 class="nes-text is-primary text-2xl mb-6">Replay de Partie</h1>
+            <div id="gameInfo" class="grid grid-cols-2 gap-4">
+              <div>
+                <p class="mb-2">Date: <span id="gameDate"></span></p>
+                <p class="mb-2">Joueur 1: <span id="player1Name"></span></p>
+                <p class="mb-2">Joueur 2: <span id="player2Name"></span></p>
+              </div>
+              <div>
+                <p class="mb-2">État: <span id="gameStatus"></span></p>
+                <p class="mb-2">Vainqueur: <span id="gameWinner"></span></p>
+                <p class="mb-2">Durée: <span id="gameDuration"></span></p>
+              </div>
+            </div>
+            <div class="mt-4">
+              <a href="/saved-games.html" class="nes-btn"
+                >Retour aux parties sauvegardées</a
+              >
+            </div>
+          </div>
+        </section>
+
+        <!-- Contrôles de lecture -->
+        <section class="mb-6">
+          <div class="nes-container is-dark">
+            <h2 class="text-xl mb-4">Contrôles</h2>
+            <div class="flex flex-col space-y-4">
+              <div class="flex justify-center space-x-4">
+                <button id="playBtn" class="nes-btn is-success control-btn">
+                  Lecture
+                </button>
+                <button id="pauseBtn" class="nes-btn control-btn">Pause</button>
+                <button id="stopBtn" class="nes-btn is-error control-btn">
+                  Stop
+                </button>
+                <button id="prevBtn" class="nes-btn is-primary control-btn">
+                  Précédent
+                </button>
+                <button id="nextBtn" class="nes-btn is-primary control-btn">
+                  Suivant
+                </button>
+              </div>
+              <div class="slider-container my-2">
+                <span id="currentMove">0</span>
+                <input
+                  type="range"
+                  id="moveSlider"
+                  min="0"
+                  value="0"
+                  step="1"
+                />
+                <span id="totalMoves">0</span>
+              </div>
+              <div class="flex justify-center">
+                <div class="nes-select">
+                  <select class="text-black" id="speedSelect">
+                    <option value="3000">Très lent (3s)</option>
+                    <option value="2000">Lent (2s)</option>
+                    <option value="1000" selected>Normal (1s)</option>
+                    <option value="500">Rapide (0.5s)</option>
+                    <option value="250">Très rapide (0.25s)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Grille de jeu -->
+        <section>
+          <div class="nes-container is-dark">
+            <h2 class="text-xl mb-4">Grille de jeu</h2>
+            <div class="flex justify-between mb-4">
+              <div id="player1Info" class="nes-container is-success with-title">
+                <p class="title text-black" id="player1Title">Joueur 1</p>
+                <p>Cellules: <span id="player1Count">0</span></p>
+              </div>
+              <div id="turnInfo" class="nes-container is-dark with-title">
+                <p class="title">Tour</p>
+                <p id="turnNumber">0</p>
+              </div>
+              <div id="player2Info" class="nes-container is-error with-title">
+                <p class="title text-black" id="player2Title">Joueur 2</p>
+                <p>Cellules: <span id="player2Count">0</span></p>
+              </div>
+            </div>
+            <div class="flex justify-center">
+              <div id="grid-container" class="nes-container is-dark"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Import du script pour interagir avec les parties sauvegardées -->
+    <script type="module" src="./src/replay.js"></script>
+  </body>
+</html>
