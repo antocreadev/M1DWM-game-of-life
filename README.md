@@ -1,5 +1,8 @@
 # Game of Life - Battle Edition | Rapport de Fin de Projet
 
+Testez le jeu ! 🔥
+Nous avons mit le jeu en ligne sur un serveur :  https://gol.gelk.fr/
+
 ## Table des matières
 
 1. [Introduction](#introduction)
